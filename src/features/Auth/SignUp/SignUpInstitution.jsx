@@ -4744,6 +4744,7 @@ const Institution = () => {
                           id="no_of_trading_names"
                           label="Number of Trading Names"
                           options={[
+                            { value: 0, label: "0" },
                             { value: 1, label: "1" },
                             { value: 2, label: "2" },
                             { value: 3, label: "3" },
@@ -4756,28 +4757,20 @@ const Institution = () => {
                             { value: 10, label: "10" },
                           ]}
                           onChange={(option) => {
-                            if (option) {
-                              const count = option.value;
-                              setFieldValue("no_of_trading_names", count);
-                              setFieldValue("trading_names_list", Array(count).fill(""));
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                no_of_trading_names: count,
-                                trading_names_list: Array(count).fill(""),
-                              }));
-                            } else {
-                              setFieldValue("no_of_trading_names", 0);
-                              setFieldValue("trading_names_list", []);
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                no_of_trading_names: 0,
-                                trading_names_list: [],
-                              }));
-                            }
+                            const count = option ? Number(option.value) : 0;
+                            const tradingList = count > 0 ? Array(count).fill("") : [];
+
+                            setFieldValue("no_of_trading_names", count);
+                            setFieldValue("trading_names_list", tradingList);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              no_of_trading_names: count,
+                              trading_names_list: tradingList,
+                            }));
                           }}
                           value={
-                            values.no_of_trading_names
-                              ? { value: values.no_of_trading_names, label: values.no_of_trading_names.toString() }
+                            values.no_of_trading_names !== undefined && values.no_of_trading_names !== null && values.no_of_trading_names !== ""
+                              ? { value: Number(values.no_of_trading_names), label: values.no_of_trading_names.toString() }
                               : null
                           }
                           onBlur={handleBlur}
