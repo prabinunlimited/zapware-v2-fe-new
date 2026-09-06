@@ -943,6 +943,11 @@ export const getPartnerConfig = async (partnerId) => {
   );
 };
 
+export const getFrontendPopup = async (partnerId) => {
+  return api.get(`/frontend-popup/${partnerId}`);
+};
+
+
 export const sendOtp = async (mobileNumber) => {
   return api.post("/send-otp", {
     mobile_number: mobileNumber,
@@ -1211,6 +1216,7 @@ export default {
   getLogoutTime,
   fetchAndStoreLogoutTime,
   getPartnerConfig,
+  getFrontendPopup,
 
   // User Profile & Modules
   fetchUserProfile,

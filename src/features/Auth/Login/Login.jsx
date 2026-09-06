@@ -92,7 +92,7 @@ import {
   selectLastDownloadUrl,
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
-import { partnerLogin, fetchAndStoreLogoutTime } from "../../../services/authService";
+import { partnerLogin, fetchAndStoreLogoutTime, getFrontendPopup } from "../../../services/authService";
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -113,6 +113,7 @@ const Login = () => {
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
   const isPartnerLoggingInRef = useRef(false);
+  const hasInitPartnerLoginRef = useRef(false);
 
   const [isPartnerLoginLoading, setIsPartnerLoginLoading] = useState(false);
 
@@ -148,6 +149,9 @@ const Login = () => {
   const showCustomerType = useSelector(selectShowCustomerType);
   const isRedirecting = useSelector(selectIsRedirecting);
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+
+  const [showFrontendPopup, setShowFrontendPopup] = useState(false);
+  const [popupImageUrl, setPopupImageUrl] = useState("");
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -215,25 +219,45 @@ const Login = () => {
 
   // Run partner login on page load & set default sign-in option (email/mobile)
   useEffect(() => {
+    if (hasInitPartnerLoginRef.current) {
+      return;
+    }
+    hasInitPartnerLoginRef.current = true;
+  
     const initPartnerLogin = async () => {
       try {
         setIsPartnerLoginLoading(true);
-
+  
         const response = await partnerLogin(true);
-
+  
         if (response?.data?.download_registration_manual === "Y") {
           setShowDownloadManual(true);
         } else {
           setShowDownloadManual(false);
         }
-
-        // Extract sign in type ("email" or "mobile") from response or cached storage
+  
         const signInType =
           response?.data?.default_signin_type ||
           localStorage.getItem("default_signin_type");
-
+  
         if (signInType) {
           dispatch(setInputType(signInType));
+        }
+  
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+  
+        if (partnerId) {
+          try {
+            const popupResponse = await getFrontendPopup(partnerId);
+            const imageUrl = popupResponse?.data?.image_url;
+  
+            if (imageUrl) {
+              setPopupImageUrl(imageUrl);
+              setShowFrontendPopup(true);
+            }
+          } catch (popupError) {
+            console.error("Frontend popup fetch error:", popupError);
+          }
         }
       } catch (error) {
         console.error("Partner login error on mount:", error);
@@ -241,7 +265,7 @@ const Login = () => {
         setIsPartnerLoginLoading(false);
       }
     };
-
+  
     initPartnerLogin();
   }, [dispatch]);
 
@@ -2254,6 +2278,20 @@ const Login = () => {
         message={modal.message}
         modalProps={modal.modalProps}
       />
+
+      {showFrontendPopup && popupImageUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative">
+            <button
+              onClick={() => setShowFrontendPopup(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
+            >
+              <AiOutlineClose size={24} />
+            </button>
+            <img src={popupImageUrl} alt="Announcement" className="w-full h-auto rounded-xl" />
+          </div>
+        </div>
+      )}
 
       {/* ========== PLAID IFRAME MODAL ========== */}
       {showPlaidModal && (
