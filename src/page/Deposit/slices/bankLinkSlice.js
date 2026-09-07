@@ -1,12 +1,15 @@
 // src/features/BankAccounts/slices/bankLinkSlice.js
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import api from "../../../services/api";
+import api, {clearApiCache} from "../../../services/api";
 
 // ✅ Async thunk for fetching Plaid-linked bank accounts (matching reference structure)
 export const fetchBankAccounts = createAsyncThunk(
   "bankLink/fetchBankAccounts",
-  async (customerId, { rejectWithValue }) => {
+  async ({ customerId, forceRefresh = false } = {}, { rejectWithValue }) => {
     try {
+      if (forceRefresh) {
+        clearApiCache("/sila/sila-bank-details");
+      }
       const response = await api.post("/sila/sila-bank-details", {
         customerId: customerId,
       });
@@ -112,7 +115,7 @@ export const refreshAccountsAfterSuccess = createAsyncThunk(
   async (customerId, { rejectWithValue, dispatch }) => {
     try {
       // Fetch bank accounts
-      await dispatch(fetchBankAccounts(customerId));
+      await dispatch(fetchBankAccounts({ customerId, forceRefresh: true }));
 
       // Note: If you need to fetch manual bank details too, add it here
       // Example: await dispatch(fetchManualBankDetails(customerId));
