@@ -96,6 +96,131 @@ const defaultProfileData = {
   id_issue_date: "",
 };
 
+// Expired ID & Missing Document Modal
+const ExpiredIdAlertModal = ({ isOpen, onClose, onAction, alertData }) => {
+  if (!isOpen) return null;
+
+  const { isExpired, isDocumentMissing, expiryDate } = alertData;
+
+  // Set accurate title and description according to the conditions
+    let title = "Action Required: Document Missing";
+    let description = "No ID document has been uploaded for your profile. Please upload a valid document.";
+  
+    if (isExpired && isDocumentMissing) {
+      title = "Action Required: ID Expired & Document Missing";
+      description = "Your ID Document has expired and no document is uploaded. Please update and upload your document.";
+    } else if (isExpired) {
+      title = "Action Required: ID Expired";
+      description = "Your ID document has expired. Please update your document.";
+    }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Frosted dark backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+
+      {/* Modal Dialog */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 20 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 text-center border border-rose-100 overflow-hidden z-10"
+      >
+        <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-rose-50/80 via-amber-50/40 to-transparent pointer-events-none" />
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 transition-colors p-2 rounded-full focus:outline-none"
+          aria-label="Close modal"
+        >
+          <FaTimesCircle className="w-5 h-5" />
+        </button>
+
+        <div className="relative mx-auto w-20 h-20 mb-5 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-rose-100 animate-ping opacity-30" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/25">
+            <FaShieldAlt className="w-8 h-8 text-white" />
+          </div>
+          <span className="absolute bottom-0 right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-md">
+            <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">
+              !
+            </span>
+          </span>
+        </div>
+
+        <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight mb-2">
+          {title}
+        </h3>
+        <p className="text-sm text-slate-600 leading-relaxed max-w-sm mx-auto mb-5">
+          {description}
+        </p>
+
+        {/* Breakdown Card */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left mb-6 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">Document Status</span>
+            <span
+              className={`inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md border ${isExpired
+                ? "text-rose-600 bg-rose-50 border-rose-200"
+                : "text-emerald-600 bg-emerald-50 border-emerald-200"
+                }`}
+            >
+              ● {isExpired ? "Expired" : "Valid"}
+            </span>
+          </div>
+
+          {expiryDate && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium">
+                {isExpired ? "Expired On" : "Valid Until"}
+              </span>
+              <span className={`font-semibold ${isExpired ? "text-rose-600" : "text-slate-700"}`}>
+                {expiryDate}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">Uploaded Document</span>
+            <span
+              className={`font-semibold ${isDocumentMissing ? "text-amber-600" : "text-emerald-600"
+                }`}
+            >
+              {isDocumentMissing ? "Not Uploaded" : "Uploaded"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-1/2 py-3 px-4 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+          >
+            I'll Do This Later
+          </button>
+          <button
+            type="button"
+            onClick={onAction}
+            className="w-full sm:w-1/2 py-3 px-4 text-sm font-semibold text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 shadow-md hover:shadow-lg shadow-rose-500/20 rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <FaEdit className="w-3.5 h-3.5" />
+            Update Document
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
 const Profile = () => {
   const { customerId } = useParams();
   const navigate = useNavigate();
@@ -221,6 +346,13 @@ const Profile = () => {
     errors: null,
   });
   const [toast, setToast] = useState(null);
+
+  const [showExpiredIdModal, setShowExpiredIdModal] = useState(false);
+  const [docAlertState, setDocAlertState] = useState({
+    isExpired: false,
+    isDocumentMissing: false,
+    expiryDate: "",
+  });
 
   const [ownerDetails, setOwnerDetails] = useState(null);
 
@@ -424,6 +556,55 @@ const Profile = () => {
     dispatch,
   ]);
   // =============== END FIX ===============
+
+  // Scroll down to the update document card
+  const handleGoToUpdateId = () => {
+    setShowExpiredIdModal(false);
+    const targetElement = document.getElementById("update-document-card");
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
+  // Check ID expiration and document missing status
+  useEffect(() => {
+    if (!profileData) return;
+
+    const expiryDateStr =
+      profileData.id_document_expiry_date ||
+      profileData.id_expiry_date ||
+      null;
+
+    // Check if document exists
+    const hasDocument = Boolean(
+      profileData.id_document_type_id ||
+      profileData.id_document_file ||
+      profileData.document_url ||
+      profileData.document_picture_front
+    );
+
+    let expired = false;
+    if (expiryDateStr) {
+      const expiryDate = new Date(expiryDateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expired = expiryDate < today;
+    }
+
+    const missing = !hasDocument;
+
+    // Show modal if document is missing OR expired
+    if (missing || expired) {
+      setDocAlertState({
+        isExpired: expired,
+        isDocumentMissing: missing,
+        expiryDate: expiryDateStr || "",
+      });
+      setShowExpiredIdModal(true);
+    } else {
+      setShowExpiredIdModal(false);
+    }
+  }, [profileData]);
 
   // Fetch additional profile data that's not in Redux
   useEffect(() => {
@@ -3408,6 +3589,13 @@ const Profile = () => {
         />,
         document.body
       )}
+      {/* Expired ID / Missing Document Alert Modal */}
+      <ExpiredIdAlertModal
+        isOpen={showExpiredIdModal}
+        onClose={() => setShowExpiredIdModal(false)}
+        onAction={handleGoToUpdateId}
+        alertData={docAlertState}
+      />
       {/* Change Email/Mobile Modal */}
       {isChangeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -4703,7 +4891,7 @@ const Profile = () => {
                       </div>
 
                       <div>
-                      <div className="flex items-center gap-3 mb-1">
+                        <div className="flex items-center gap-3 mb-1">
                           <label className="block text-xs text-gray-500">ID Expiry Date</label>
                         </div>
                         {isEditing ? (
@@ -4753,7 +4941,7 @@ const Profile = () => {
 
               {/* Upload New ID Card */}
               {isIndividualAccount && !isEditing && (
-                <div className="bg-white rounded-xl shadow-md p-6">
+                <div id="update-document-card" className="bg-white rounded-xl shadow-md p-6">
                   <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
                     Update Document
                   </h2>

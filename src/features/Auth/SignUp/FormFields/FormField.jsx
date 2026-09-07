@@ -17,11 +17,12 @@ const FormField = ({
   disabled = false,
   placeholder = "",
   autoComplete,
-  maxLength,
   rows = 4,
-  as = "input", // Add 'as' prop to determine if it's input or textarea
-  activeField,  
-  fieldStyles, 
+  as = "input",
+  activeField,
+  fieldStyles,
+  minLength,
+  maxLength,
   ...props
 }) => {
   const baseClassName = `w-full px-4 py-3 text-sm text-gray-900 bg-white border ${
@@ -32,11 +33,31 @@ const FormField = ({
     disabled ? "bg-gray-100 opacity-60 cursor-not-allowed" : ""
   }`;
 
+  // Generate length label if minLength or maxLength is set
+  const lengthHint =
+    minLength || maxLength
+      ? [
+          minLength ? `Min: ${minLength}` : null,
+          maxLength ? `Max: ${maxLength}` : null,
+        ]
+          .filter(Boolean)
+          .join(" | ") + " characters"
+      : null;
+
   return (
-    <div className="space-y-2">
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
+    <div className="space-y-1">
+      <div className="flex justify-between items-center">
+        <label htmlFor={id} className="block text-sm font-medium text-gray-700">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+
+        {/* Displays length restrictions if they exist */}
+        {lengthHint && (
+          <span className="text-xs text-gray-400 font-mono">
+            {lengthHint}
+          </span>
+        )}
+      </div>
 
       <div className="relative">
         {as === "textarea" ? (
@@ -51,6 +72,8 @@ const FormField = ({
             name={name}
             rows={rows}
             disabled={disabled}
+            minLength={minLength || undefined}
+            maxLength={maxLength || undefined}
             {...props}
           />
         ) : (
@@ -65,7 +88,8 @@ const FormField = ({
             value={value}
             name={name}
             autoComplete={autoComplete}
-            maxLength={maxLength}
+            minLength={minLength || undefined}
+            maxLength={maxLength || undefined}
             disabled={disabled}
             {...props}
           />

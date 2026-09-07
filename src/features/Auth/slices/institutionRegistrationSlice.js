@@ -302,27 +302,29 @@ export const submitInstitutionForm = createAsyncThunk(
         },
       );
 
-      if (!response.data || Object.keys(response.data).length === 0) {
-        return {
-          success: true,
-          message: "Registration completed successfully",
-        };
+      // Prevent null/cancelled/empty responses from reporting success
+      if (!response || !response.data || Object.keys(response.data).length === 0) {
+        return rejectWithValue({
+          status: "error",
+          message: "Request could not be completed. Please try again.",
+        });
+      }
+
+      // If backend returned HTTP 200 with an error status
+      if (response.data.status === "error" || response.data.success === false) {
+        return rejectWithValue(response.data);
       }
 
       return response.data;
     } catch (error) {
-      // Enhanced error handling to preserve your API's error structure
       if (error.response?.data) {
-        // Preserve the entire error response from your API
-        // Your API returns: { status: "error", message: "...", data: "" }
         return rejectWithValue(error.response.data);
       }
 
-      // Handle network errors or other issues
       return rejectWithValue({
         status: "error",
         message: error.message || "Submission failed",
-        data: ""
+        data: "",
       });
     }
   },
@@ -1736,25 +1738,18 @@ const institutionRegistrationSlice = createSlice({
         state.loading = true;
         state.error = null;
       })
-      .addCase(submitInstitutionForm.fulfilled, (state, action) => {
+      .addCase(submitInstitutionForm.fulfilled, (state) => {
         state.loading = false;
-        if (
-          !action.payload ||
-          action.payload.success === true ||
-          action.payload.success === undefined
-        ) {
-          state.currentStep += 1;
-        } else if (action.payload.success === false) {
-          state.error = action.payload.message || "Registration failed";
-          state.showPopup = true;
-          state.errorMessage = action.payload.message || "Registration failed";
-        }
+        state.error = null;
+        // DO NOT INCREMENT currentStep! Step 5 is the final step.
       })
       .addCase(submitInstitutionForm.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
         state.showPopup = true;
-        state.errorMessage = action.payload || "Submission failed";
+        state.errorMessage =
+          action.payload?.message ||
+          (typeof action.payload === "string" ? action.payload : "Submission failed");
       })
 
       // NAICS Codes

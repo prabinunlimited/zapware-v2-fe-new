@@ -223,34 +223,34 @@ const Login = () => {
       return;
     }
     hasInitPartnerLoginRef.current = true;
-  
+
     const initPartnerLogin = async () => {
       try {
         setIsPartnerLoginLoading(true);
-  
+
         const response = await partnerLogin(true);
-  
+
         if (response?.data?.download_registration_manual === "Y") {
           setShowDownloadManual(true);
         } else {
           setShowDownloadManual(false);
         }
-  
+
         const signInType =
           response?.data?.default_signin_type ||
           localStorage.getItem("default_signin_type");
-  
+
         if (signInType) {
           dispatch(setInputType(signInType));
         }
-  
+
         const partnerId = localStorage.getItem("whitelabelledpartnerid");
-  
+
         if (partnerId) {
           try {
             const popupResponse = await getFrontendPopup(partnerId);
             const imageUrl = popupResponse?.data?.image_url;
-  
+
             if (imageUrl) {
               setPopupImageUrl(imageUrl);
               setShowFrontendPopup(true);
@@ -265,7 +265,7 @@ const Login = () => {
         setIsPartnerLoginLoading(false);
       }
     };
-  
+
     initPartnerLogin();
   }, [dispatch]);
 
@@ -2281,14 +2281,18 @@ const Login = () => {
 
       {showFrontendPopup && popupImageUrl && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg relative">
+          <div className="relative inline-block rounded-xl shadow-2xl">
             <button
               onClick={() => setShowFrontendPopup(false)}
-              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 z-10"
+              className="absolute top-3 right-3 z-10 bg-black/60 hover:bg-black/80 text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors shadow-md"
             >
-              <AiOutlineClose size={24} />
+              <AiOutlineClose size={18} />
             </button>
-            <img src={popupImageUrl} alt="Announcement" className="w-full h-auto rounded-xl" />
+            <img
+              src={popupImageUrl}
+              alt="Announcement"
+              className="block max-w-[90vw] max-h-[90vh] w-auto h-auto rounded-xl object-contain"
+            />
           </div>
         </div>
       )}

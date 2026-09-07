@@ -979,6 +979,8 @@ const Institution = () => {
               hasDependency: field.has_dependency === 1,
               dependencyFieldName: field.dependency_field_name,
               dependencyFieldValue: field.dependency_field_value,
+              minimumLength: field.minimum_length,
+              maximumLength: field.maximum_length,
             };
           }
         });
@@ -2011,12 +2013,12 @@ const Institution = () => {
       controller_resident_country: "resident_country",
       controller_mobilenumber_countrycode: "phone_code",
       controller_mobile_number: "phone_number",
-      controller_nationality: "nationality",
+      controller_nationality: "controllerNationality",
       controller_country: "country",
       controller_state: "state",
       controller_city: "city",
       controller_street_address_1: "street_address_1",
-      controller_zip_code: "zip_code",
+      controller_zip_code: "controllerZipCode",
       controller_gender: "gender",
       controller_designation: "designation",
       controller_doc_country: "id_issue_country_id",
@@ -4350,7 +4352,7 @@ const Institution = () => {
               doc_id: 'doc_id',
               doc_country: 'doc_country',
               id_issued_date: 'id_issued_date',
-              terms_and_conditions: 'terms_and_conditions',
+              terms_and_conditions: 'terms',
 
               // Step 3 - Controller Information
               controller_first_name: 'controllerFirstName',
@@ -4414,13 +4416,35 @@ const Institution = () => {
           valuesRef.current = values;
 
           const RequiredFormField = useCallback(
-            (props) => (
-              <FormField
-                {...props}
-                required={isFieldMandatory(resolveApiFieldName(props.id), valuesRef.current)}
-              />
-            ),
-            [isFieldMandatory, resolveApiFieldName],
+            (props) => {
+              const apiKey = resolveApiFieldName(props.id);
+              const fieldConfig = mandatoryFieldsMap[apiKey];
+              const isMandatory = isFieldMandatory(apiKey, valuesRef.current);
+          
+              const minLen = fieldConfig?.minimumLength ?? undefined;
+              const maxLen = fieldConfig?.maximumLength ?? undefined;
+          
+              return (
+                <FormField
+                  {...props}
+                  required={isMandatory}
+                  minLength={minLen || undefined}
+                  maxLength={maxLen || undefined}
+                  // If min or max length is configured, pass an indicator:
+                  lengthHint={
+                    minLen || maxLen
+                      ? [
+                          minLen ? `Min: ${minLen}` : null,
+                          maxLen ? `Max: ${maxLen}` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" | ")
+                      : null
+                  }
+                />
+              );
+            },
+            [isFieldMandatory, resolveApiFieldName, mandatoryFieldsMap],
           );
 
           const RequiredCustomSelect = useCallback(
@@ -4744,6 +4768,7 @@ const Institution = () => {
                           id="no_of_trading_names"
                           label="Number of Trading Names"
                           options={[
+                            { value: 0, label: "0" },
                             { value: 1, label: "1" },
                             { value: 2, label: "2" },
                             { value: 3, label: "3" },
@@ -4756,28 +4781,20 @@ const Institution = () => {
                             { value: 10, label: "10" },
                           ]}
                           onChange={(option) => {
-                            if (option) {
-                              const count = option.value;
-                              setFieldValue("no_of_trading_names", count);
-                              setFieldValue("trading_names_list", Array(count).fill(""));
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                no_of_trading_names: count,
-                                trading_names_list: Array(count).fill(""),
-                              }));
-                            } else {
-                              setFieldValue("no_of_trading_names", 0);
-                              setFieldValue("trading_names_list", []);
-                              setLocalFormData((prev) => ({
-                                ...prev,
-                                no_of_trading_names: 0,
-                                trading_names_list: [],
-                              }));
-                            }
+                            const count = option ? Number(option.value) : 0;
+                            const tradingList = count > 0 ? Array(count).fill("") : [];
+
+                            setFieldValue("no_of_trading_names", count);
+                            setFieldValue("trading_names_list", tradingList);
+                            setLocalFormData((prev) => ({
+                              ...prev,
+                              no_of_trading_names: count,
+                              trading_names_list: tradingList,
+                            }));
                           }}
                           value={
-                            values.no_of_trading_names
-                              ? { value: values.no_of_trading_names, label: values.no_of_trading_names.toString() }
+                            values.no_of_trading_names !== undefined && values.no_of_trading_names !== null && values.no_of_trading_names !== ""
+                              ? { value: Number(values.no_of_trading_names), label: values.no_of_trading_names.toString() }
                               : null
                           }
                           onBlur={handleBlur}
@@ -7633,7 +7650,7 @@ const Institution = () => {
 
                             <RequiredFormField
                               id="controllerHouseNumber"
-                              label="House Number"
+                              label="ApartmentUnit Number"
                               name="controllerHouseNumber"
                               value={values.controllerHouseNumber || ""}
                               onChange={enhancedHandleChange("controllerHouseNumber", setFieldValue)}
