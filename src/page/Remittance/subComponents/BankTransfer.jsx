@@ -885,7 +885,7 @@ const BankTransfer = ({
                     </span>
                   )}
 
-                  {/* Add/Remove Bank Button - Mobile responsive */}
+                  {/* Add Bank Button - Mobile responsive */}
                   <button
                     type="button"
                     onClick={() => {
@@ -908,7 +908,7 @@ const BankTransfer = ({
                     className="text-xs sm:text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 whitespace-nowrap self-start sm:self-auto"
                   >
                     <FaPlus className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                    Link/Remove Bank
+                    Add Bank
                   </button>
                 </div>
               </div>
