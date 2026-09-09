@@ -29,6 +29,7 @@ import {
   verifyPasscode,
   verifyOTP,
   downloadManual,
+  resendOtpLogin,
 } from "../../Auth/authThunk";
 
 // Selectors
@@ -152,6 +153,29 @@ const Login = () => {
 
   const [showFrontendPopup, setShowFrontendPopup] = useState(false);
   const [popupImageUrl, setPopupImageUrl] = useState("");
+
+  // State for resend OTP login & dynamic countdown
+  const [loginRequestUserId, setLoginRequestUserId] = useState(null);
+  const [loginRequestUserType, setLoginRequestUserType] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+
+  // Dynamic countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -1100,6 +1124,19 @@ const Login = () => {
         return;
       }
 
+      // Capture response data from send-otp-login
+      if (result.data) {
+        if (result.data.login_request_user_id) {
+          setLoginRequestUserId(result.data.login_request_user_id);
+        }
+        if (result.data.login_request_user_type) {
+          setLoginRequestUserType(result.data.login_request_user_type);
+          setSelectedUserType(result.data.login_request_user_type);
+        }
+        if (result.data.resend_minutes) {
+          setResendCooldown(Number(result.data.resend_minutes) * 60);
+        }
+      }
 
       if (!result.message || result.message === "OTP sent successfully") {
         dispatch(setShowOtpInput(true));
@@ -1138,7 +1175,6 @@ const Login = () => {
         return;
       }
 
-
       dispatch(
         openModal({
           title: "Error",
@@ -1146,6 +1182,54 @@ const Login = () => {
           type: "error",
         })
       );
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (isResendingOtp || resendCooldown > 0) return;
+
+    if (!loginRequestUserId || !loginRequestUserType) {
+      handleGenerateOTP();
+      return;
+    }
+
+    setIsResendingOtp(true);
+
+    try {
+      const payload = {
+        login_request_user_id: loginRequestUserId,
+        login_request_user_type: loginRequestUserType,
+      };
+
+      const result = await dispatch(resendOtpLogin(payload)).unwrap();
+
+      // Reset cooldown dynamically from the returned minutes
+      const minutes = result.data?.resend_minutes || 1;
+      setResendCooldown(Number(minutes) * 60);
+
+      dispatch(setOtp(new Array(6).fill("")));
+
+      dispatch(
+        openModal({
+          title: "Success",
+          message: result.message || "OTP resent successfully.",
+          type: "success",
+          modalProps: {
+            autoClose: true,
+            autoCloseDelay: 3000,
+          },
+        })
+      );
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: typeof error === "string" ? error : error?.message || "Failed to resend OTP",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsResendingOtp(false);
     }
   };
 
@@ -2475,13 +2559,15 @@ const Login = () => {
             <div className="mt-4 text-center">
               <button
                 type="button"
-                onClick={handleGenerateOTP}
-                className="text-blue-600 hover:text-blue-800"
-                disabled={isGeneratingOtp || isVerifyingOtp}
+                onClick={handleResendOTP}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                disabled={isGeneratingOtp || isVerifyingOtp || isResendingOtp || resendCooldown > 0}
               >
-                {isGeneratingOtp
-                  ? "Sending..."
-                  : "Didn't receive code? Resend OTP"}
+                {isResendingOtp
+                  ? "Resending OTP..."
+                  : resendCooldown > 0
+                    ? `Resend OTP in ${formatTimer(resendCooldown)}`
+                    : "Didn't receive code? Resend OTP"}
               </button>
             </div>
           </div>
