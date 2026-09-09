@@ -72,13 +72,7 @@ const OpenCurrencyAccount = () => {
   const bearertoken = localStorage.getItem("bearertoken");
   const partnerId = localStorage.getItem("whitelabelledpartnerid");
   const isPartner = localStorage.getItem("iswhitelabelledpartner");
-  const showRemitOnly = localStorage.getItem(
-    "showRemittanceOnlyOnRegistration",
-  );
   const hostName = window.location.hostname;
-
-  // Check if partner ID is 8
-  const isPartnerId8 = partnerId === "8";
 
   // Redux Selectors
   const accountOptions = useSelector(selectors.selectAccountOptions) || [];
@@ -160,7 +154,7 @@ const OpenCurrencyAccount = () => {
       });
   }, [API_URL, bearertoken]);
 
-  // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
+  // 1. INITIALIZATION
 useEffect(() => {
   if (!accountType) {
     navigate("/selectaccounttype");
@@ -172,15 +166,6 @@ useEffect(() => {
     console.log("⏭️ Skipping duplicate fetch (Strict Mode)");
     return;
   }
-
-  // For partner ID 8, we only want remittance services
-  // if (isPartnerId8) {
-  //   // Automatically select remittance only and clear any selections
-  //   dispatch(actions.setRemittanceOnlyAccepted(true));
-  //   dispatch(actions.clearSelectedAccounts());
-  //   dispatch(actions.setSelectedPackageCurrencies([]));
-  //   return;
-  // }
 
   dispatch(actions.clearAllSelections());
 
@@ -212,7 +197,6 @@ useEffect(() => {
   }
 }, [
   accountType,
-  isPartnerId8,
   // Remove selectedCountryId from dependencies
   isPartnerPackageModule,
   dispatch,
@@ -221,11 +205,8 @@ useEffect(() => {
   API_URL,
 ]);
 
-  // 2. PRICE FETCHING - Skip for partner ID 8
+  // 2. PRICE FETCHING
   useEffect(() => {
-    // Skip price fetching for partner ID 8 since we only offer remittance
-    if (isPartnerId8) return;
-
     const count =
       isPartnerPackageModule === "Y"
         ? selectedPackageCurrencies.length
@@ -257,7 +238,6 @@ useEffect(() => {
     accountType,
     API_URL,
     bearertoken,
-    isPartnerId8,
   ]);
 
   // 3. ACTION HANDLERS
@@ -365,18 +345,9 @@ useEffect(() => {
     }
   };
 
-  // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
+  // 4. SUBMIT HANDLER
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
-
-    // For partner ID 8, we only accept remittance services
-    if (isPartnerId8 && !remittanceOnlyAccepted) {
-      setModalMessage(
-        "Only Remittance Services are available for this partner.",
-      );
-      setIsModalOpen(true);
-      return;
-    }
 
     if (
       isPartnerPackageModule === "N" &&
@@ -500,7 +471,6 @@ useEffect(() => {
     );
   }, [
     isSubmitDisabled,
-    isPartnerId8,
     isPartnerPackageModule,
     selectedAccounts,
     selectedPackageCurrencies,
@@ -855,9 +825,7 @@ useEffect(() => {
           </div>
 
           {/* ========== CURRENCY ACCOUNTS SELECTION ========== */}
-          {/* Hide currency selection for partner ID 8 */}
-          {!isPartnerId8 &&
-            !remittanceOnlyAccepted &&
+          {!remittanceOnlyAccepted &&
             isPartnerPackageModule === "N" && (
               <div className="mb-8">
                 {/* Header */}
@@ -1109,9 +1077,8 @@ useEffect(() => {
               </div>
             )}
 
-          {/* Package View (if enabled) - Hide for partner ID 8 */}
-          {!isPartnerId8 &&
-            isPartnerPackageModule === "Y" &&
+          {/* Package View (if enabled) */}
+          {isPartnerPackageModule === "Y" &&
             !remittanceOnlyAccepted ? (
             <div className="mb-8">
               <div className="text-center mb-6">
@@ -1392,10 +1359,9 @@ useEffect(() => {
                 </div>
               )}
             </div>
-          ) : !isPartnerId8 &&
-            isPartnerPackageModule === "Y" &&
+          ) : isPartnerPackageModule === "Y" &&
             remittanceOnlyAccepted ? (
-            // Remittance Only View for Package Module (non-partner 8)
+            // Remittance Only View for Package Module
             <div className="mb-8">
               <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
@@ -1490,7 +1456,7 @@ useEffect(() => {
             </div>
           ) : null}
 
-          {/* Terms and Remittance Checkbox */}
+          {/* Terms Checkbox */}
           <div className="mb-6 space-y-3">
             <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
               <div>
@@ -1538,86 +1504,7 @@ useEffect(() => {
                 </div>
               </label>
             </div>
-
-            {!isPartnerId8 &&
-              ((isPartner === "Y" && showRemitOnly === "Y") ||
-                isPartner === "0") &&
-              remittanceOnlyAccepted && ( // Only show when remittance only is selected
-                <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div>
-                    <input
-                      type="checkbox"
-                      id="remittanceOnly"
-                      checked={remittanceOnlyAccepted}
-                      onChange={(e) =>
-                        dispatch(
-                          actions.setRemittanceOnlyAccepted(e.target.checked),
-                        )
-                      }
-                      className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                  </div>
-                  <label
-                    htmlFor="remittanceOnly"
-                    className="ml-3 text-gray-700 text-sm flex flex-col"
-                  >
-                    <div className="flex items-center">
-                      <span className="mr-1">Activate</span>
-                      <span className="text-blue-600 font-medium mr-1">
-                        Remittance Only
-                      </span>
-                      <span>mode (for money transfers only)</span>
-                    </div>
-                  </label>
-                </div>
-              )}
           </div>
-
-          {/* DEBUG PANEL - Update the formattedId to use hyphen */}
-          {/* {selectedAccounts.length > 0 && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
-              <details>
-                <summary className="font-mono text-yellow-800 cursor-pointer">
-                  🔍 Debug: Service Provider IDs (Click to expand)
-                </summary>
-                <div className="mt-2 space-y-1">
-                  {selectedAccounts.map(accountId => {
-                    const parts = accountId.split('_');
-                    if (parts.length >= 3) {
-                      const accountType = parts[0];
-                      const serviceProviderId = parts[1];
-                      const currency = parts[2];
-                      // ✅ Format with currency code: "1-named-AED"
-                      const formattedId = `${serviceProviderId}-${accountType}-${currency}`;
-                      return (
-                        <div key={accountId} className="font-mono text-xs">
-                          <span className="text-blue-600">{currency}</span>:
-                          <span className="text-green-600 ml-2">"{formattedId}"</span>
-                          <span className="text-gray-500 ml-2">({accountType})</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                  <div className="mt-2 pt-2 border-t border-yellow-200">
-                    <span className="font-bold">Will send to API:</span>
-                    <pre className="mt-1 bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
-                      {JSON.stringify({
-                        service_provide_ids: [...new Set(selectedAccounts.map(accountId => {
-                          const parts = accountId.split('_');
-                          return parts.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
-                        }).filter(Boolean))],
-                        service_provider_id: (() => {
-                          const parts = selectedAccounts[0]?.split('_');
-                          return parts?.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
-                        })()
-                      }, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </details>
-            </div>
-          )} */}
 
           {/* Referral Code */}
           <div className="mb-6">
