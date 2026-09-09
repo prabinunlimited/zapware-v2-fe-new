@@ -2116,15 +2116,15 @@ const Institution = () => {
         // }
 
         // SSN confirmation check
-        if (
-          currentStep === 2 &&
-          (isNamedAccount || remittanceOnlyAccepted) &&
-          !(values.country === "United States" || values.country === 186)
-        ) {
-          setPendingNextStep(true);
-          setShowSSNConfirmation(true);
-          return;
-        }
+        // if (
+        //   currentStep === 2 &&
+        //   (isNamedAccount || remittanceOnlyAccepted) &&
+        //   !(values.country === "United States" || values.country === 186)
+        // ) {
+        //   setPendingNextStep(true);
+        //   setShowSSNConfirmation(true);
+        //   return;
+        // }
 
         if (currentStep === 2) {
           validateStepDataFlow(2, 4, values);
@@ -2407,6 +2407,7 @@ const Institution = () => {
 
         const finalData = {
           ...restFormData,
+          ...(remittanceOnlyAccepted && { remit_customer: 1 }),
           institution_account_type_id: finalFormData.institution_account_type_id,
           institution_type_id: finalFormData.institution_type_id,
           agent_code: agentCode,
@@ -2572,8 +2573,8 @@ const Institution = () => {
               ...owner,
               owner_type: owner.owner_type || "individual",
               owner_role_id: owner.owner_role_id || "",
-              owner_country_id: findCountryId(owner.owner_country_id || owner.owner_resident_country_id),
-              owner_resident_country_id: findCountryId(owner.owner_resident_country_id || owner.owner_country_id),
+              owner_country_id: findCountryId(owner.owner_country_id || owner.owner_resident_country_id) || "",
+              owner_resident_country_id: findCountryId(owner.owner_resident_country_id || owner.owner_country_id) || "",
               owner_institution_name: isInstitutionOwner ? owner.owner_name || "" : "",
               owner_first_name: isInstitutionOwner ? "" : owner.owner_first_name || "",
               owner_middle_name: isInstitutionOwner ? "" : owner.owner_middle_name || "",
@@ -8229,7 +8230,7 @@ const Institution = () => {
                   type="error"
                 />
               )}
-              {showSSNConfirmation && (
+              {/* {showSSNConfirmation && (
                 <SSNConfirmationPopup
                   onClose={handleSSNCancel}
                   onConfirm={handleSSNConfirm}
@@ -8239,7 +8240,7 @@ const Institution = () => {
                       : "Remittance Services Only"
                   }
                 />
-              )}
+              )} */}
               {showPepPopup && (
                 <PEPPopup onClose={() => setShowPepPopup(false)} />
               )}
