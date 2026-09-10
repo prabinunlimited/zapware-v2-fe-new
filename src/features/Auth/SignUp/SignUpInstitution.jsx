@@ -683,8 +683,8 @@ const Institution = () => {
       sender_types: mergedData.sender_types || "",
       sender_types_other: mergedData.sender_types_other || "",
       sender_industries_top_5: mergedData.sender_industries_top_5 || "",
-      countries_to_receive_funds_from: mergedData.countries_to_receive_funds_from || [],
-      countries_to_send_funds_to: mergedData.countries_to_send_funds_to || [],
+      customer_receiving_funds_countries: mergedData.customer_receiving_funds_countries || [],
+      customer_sending_countries: mergedData.customer_sending_countries || [],
       expected_frequency_payments_in: mergedData.expected_frequency_payments_in || "",
       expected_avg_payments_in_currency: mergedData.expected_avg_payments_in_currency || "",
       expected_avg_payments_in_amount: mergedData.expected_avg_payments_in_amount || "",
@@ -1701,8 +1701,8 @@ const Institution = () => {
             "sender_types",
             "sender_types_other",
             "sender_industries_top_5",
-            "countries_to_send_funds_to",
-            "countries_to_receive_funds_from",
+            "customer_sending_countries",
+            "customer_receiving_funds_countries",
             "expected_frequency_payments_in",
             "expected_avg_payments_in_currency",
             "expected_avg_payments_in_amount",
@@ -2465,12 +2465,11 @@ const Institution = () => {
             ? finalFormData.specify_high_risk_countries
             : [],
 
-          customer_receiving_funds_countries: finalFormData.countries_to_receive_funds_from?.length
-            ? finalFormData.countries_to_receive_funds_from
+          customer_receiving_funds_countries: finalFormData.customer_receiving_funds_countries?.length
+            ? finalFormData.customer_receiving_funds_countries
             : [],
-
-          customer_sending_countries: finalFormData.countries_to_send_funds_to?.length
-            ? finalFormData.countries_to_send_funds_to
+          customer_sending_countries: finalFormData.customer_sending_countries?.length
+            ? finalFormData.customer_sending_countries
             : [],
 
           user_images: userImagesArray,
@@ -4306,8 +4305,8 @@ const Institution = () => {
               sender_types: 'sender_types',
               sender_types_other: 'sender_types_other',
               sender_industries_top_5: 'sender_industries_top_5',
-              countries_to_receive_funds_from: 'countries_to_receive_funds_from',
-              countries_to_send_funds_to: 'customer_sending_countries',
+              customer_receiving_funds_countries: 'customer_receiving_funds_countries',
+              customer_sending_countries: 'customer_sending_countries',
               expected_frequency_payments_in: 'expected_frequency_payments_in',
               expected_avg_payments_in_currency: 'expected_avg_payments_in_currency',
               expected_avg_payments_in_amount: 'expected_avg_payments_in_amount',
@@ -4363,7 +4362,7 @@ const Institution = () => {
               controller_password: 'controller_password',
               controller_confirm_password: 'controller_confirm_password',
               controller_resident_country: 'resident_country',
-              controller_nationality: 'nationality',
+              controller_nationality: 'controllerNationality',
               controller_mobilenumber_countrycode: 'controller_mobilenumber_countrycode',
               controller_mobile_number: 'controller_mobile_number',
               controller_country: 'controller_  country',
@@ -4421,10 +4420,10 @@ const Institution = () => {
               const apiKey = resolveApiFieldName(props.id);
               const fieldConfig = mandatoryFieldsMap[apiKey];
               const isMandatory = isFieldMandatory(apiKey, valuesRef.current);
-          
+
               const minLen = fieldConfig?.minimumLength ?? undefined;
               const maxLen = fieldConfig?.maximumLength ?? undefined;
-          
+
               return (
                 <FormField
                   {...props}
@@ -4435,11 +4434,11 @@ const Institution = () => {
                   lengthHint={
                     minLen || maxLen
                       ? [
-                          minLen ? `Min: ${minLen}` : null,
-                          maxLen ? `Max: ${maxLen}` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(" | ")
+                        minLen ? `Min: ${minLen}` : null,
+                        maxLen ? `Max: ${maxLen}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" | ")
                       : null
                   }
                 />
@@ -5476,33 +5475,33 @@ const Institution = () => {
                         {/* Countries to Receive Funds From - ADD THIS SECTION */}
                         <div>
                           <RequiredCustomSelect
-                            id="countries_to_receive_funds_from"
-                            label="Countries to Receive Funds From"
+                            id="customer_receiving_funds_countries"
+                            label="Customer Receiving Countries"
                             options={countryOptions}
                             isMulti={true}
                             onChange={(selectedOptions) => {
                               const selectedIds = selectedOptions
                                 ? selectedOptions.map((opt) => opt.value)
                                 : [];
-                              setFieldValue("countries_to_receive_funds_from", selectedIds);
+                              setFieldValue("customer_receiving_funds_countries", selectedIds);
                               setLocalFormData((prev) => ({
                                 ...prev,
-                                countries_to_receive_funds_from: selectedIds,
+                                customer_receiving_funds_countries: selectedIds,
                               }));
                               dispatch(
                                 setFormField({
-                                  field: "countries_to_receive_funds_from",
+                                  field: "customer_receiving_funds_countries",
                                   value: selectedIds,
                                 }),
                               );
                             }}
                             value={countryOptions.filter((opt) =>
-                              values.countries_to_receive_funds_from?.includes(opt.value),
+                              values.customer_receiving_funds_countries?.includes(opt.value),
                             )}
                             onBlur={handleBlur}
-                            touched={touched.countries_to_receive_funds_from}
-                            error={errors.countries_to_receive_funds_from}
-                            placeholder="Select countries to receive funds from..."
+                            touched={touched.customer_receiving_funds_countries}
+                            error={errors.customer_receiving_funds_countries}
+                            placeholder="Select customer receiving countries..."
                             isLoading={countriesLoading}
 
                           />
@@ -5511,33 +5510,33 @@ const Institution = () => {
                         {/* Countries Sending  */}
                         <div>
                           <RequiredCustomSelect
-                            id="countries_to_send_funds_to"
-                            label="Countries to Send Funds To"
+                            id="customer_sending_countries"
+                            label="Customer Sending Countries"
                             options={countryOptions}
                             isMulti={true}
                             onChange={(selectedOptions) => {
                               const selectedIds = selectedOptions
                                 ? selectedOptions.map((opt) => opt.value)
                                 : [];
-                              setFieldValue("countries_to_send_funds_to", selectedIds);
+                              setFieldValue("customer_sending_countries", selectedIds);
                               setLocalFormData((prev) => ({
                                 ...prev,
-                                countries_to_send_funds_to: selectedIds,
+                                customer_sending_countries: selectedIds,
                               }));
                               dispatch(
                                 setFormField({
-                                  field: "countries_to_send_funds_to",
+                                  field: "customer_sending_countries",
                                   value: selectedIds,
                                 }),
                               );
                             }}
                             value={countryOptions.filter((opt) =>
-                              values.countries_to_send_funds_to?.includes(opt.value),
+                              values.customer_sending_countries?.includes(opt.value),
                             )}
                             onBlur={handleBlur}
                             touched={touched.countries_to_send_funds_to}
                             error={errors.countries_to_send_funds_to}
-                            placeholder="Select countries to send funds to..."
+                            placeholder="Select customer sending countries..."
                             isLoading={countriesLoading}
                           />
                         </div>
