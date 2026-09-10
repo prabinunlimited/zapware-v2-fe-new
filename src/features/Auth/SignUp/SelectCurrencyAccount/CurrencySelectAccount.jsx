@@ -544,32 +544,32 @@ useEffect(() => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center relative overflow-hidden px-3 sm:px-6">
       {/* Decorative elements */}
       <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-r from-blue-500/5 to-indigo-500/5"></div>
       <div className="absolute bottom-0 right-0 w-full h-full bg-blue-400/5 rounded-full blur-3xl"></div>
 
       {/* Main Content */}
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100 my-8">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100 my-4 sm:my-8">
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 sm:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/20 rounded-full -translate-x-12 translate-y-12"></div>
 
           <div className="relative z-10">
-            <div className="flex items-center justify-center mb-4">
-              <div className="bg-white/20 p-4 rounded-2xl mr-4 backdrop-blur-sm">
+            <div className="flex items-center justify-center mb-4 pr-8 sm:pr-0">
+              <div className="bg-white/20 p-3 sm:p-4 rounded-2xl mr-3 sm:mr-4 backdrop-blur-sm shrink-0">
                 <FontAwesomeIcon
                   icon={getAccountTypeIcon()}
-                  className="text-2xl"
+                  className="text-xl sm:text-2xl"
                 />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold">
+              <h1 className="text-xl sm:text-3xl font-bold">
                 {getAccountTypeTitle()}
               </h1>
             </div>
             {!forceRemittanceOnly && (
-              <p className="text-center text-blue-100 text-sm opacity-90">
+              <p className="text-center text-blue-100 text-xs sm:text-sm opacity-90">
                 {ucaDescription ||
                   "Select your currency accounts for international transactions"}
               </p>
@@ -579,17 +579,17 @@ useEffect(() => {
           {/* Close Button */}
           <button
             onClick={() => navigate(-1)}
-            className="absolute top-6 right-6 z-10 p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
+            className="absolute top-3 right-3 sm:top-6 sm:right-6 z-10 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
             aria-label="Close"
           >
             <FontAwesomeIcon
               icon={faTimes}
-              className="text-lg text-white group-hover:text-gray-200 transition-colors"
+              className="text-base sm:text-lg text-white group-hover:text-gray-200 transition-colors"
             />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
 
           {/* Service Type Selection */}
           <div className="mb-8">
@@ -602,7 +602,7 @@ useEffect(() => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Currency Accounts Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${!remittanceOnlyAccepted
+                  className={`relative rounded-2xl border-2 p-4 sm:p-6 cursor-pointer transition-all duration-300 ${!remittanceOnlyAccepted
                     ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
                     : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
                     }`}
@@ -657,7 +657,7 @@ useEffect(() => {
 
                 {/* Remittance Only Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${remittanceOnlyAccepted
+                  className={`relative rounded-2xl border-2 p-4 sm:p-6 cursor-pointer transition-all duration-300 ${remittanceOnlyAccepted
                     ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
                     : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
                     }`}
@@ -712,26 +712,26 @@ useEffect(() => {
               </div>
             ) : (
               // ONLY when API returns empty data - Show only Remittance (no option to switch)
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-4 sm:p-8">
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full mb-4 sm:mb-6">
                     <FontAwesomeIcon
                       icon={faExchangeAlt}
-                      className="text-green-600 text-3xl"
+                      className="text-green-600 text-2xl sm:text-3xl"
                     />
                   </div>
 
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">
                     Remittance Services
                   </h3>
 
-                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-lg">
+                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-sm sm:text-lg">
                     Send and receive money internationally with fast, secure,
                     and cost-effective transfers. No need for multiple currency
                     accounts.
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
                       <div className="flex items-center mb-3">
                         <div className="bg-green-100 p-3 rounded-lg mr-4">
@@ -829,14 +829,14 @@ useEffect(() => {
             isPartnerPackageModule === "N" && (
               <div className="mb-8">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800">
                     Select Currency Accounts
                   </h2>
                   <div className="flex items-center space-x-2">
                     <FontAwesomeIcon
                       icon={faSearch}
-                      className="text-gray-400"
+                      className="text-gray-400 shrink-0"
                     />
                     <input
                       type="text"
@@ -845,7 +845,7 @@ useEffect(() => {
                       onChange={(e) =>
                         dispatch(actions.setSearchTerm(e.target.value))
                       }
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -853,8 +853,8 @@ useEffect(() => {
                 {/* Named Accounts Section */}
                 {filteredNamedAccounts.length > 0 && (
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-4">
+                      <div className="flex items-center flex-wrap">
                         <button
                           onClick={() => toggleSection("named")}
                           className="mr-3 text-gray-600 hover:text-gray-800"
@@ -867,7 +867,7 @@ useEffect(() => {
                             }
                           />
                         </button>
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                           <FontAwesomeIcon
                             icon={faUser}
                             className="mr-2 text-blue-500"
@@ -885,7 +885,7 @@ useEffect(() => {
                           <FontAwesomeIcon icon={faCircleInfo} />
                         </button>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs sm:text-sm text-gray-500 ml-8 sm:ml-0">
                         Dedicated accounts in your name
                       </div>
                     </div>
@@ -917,8 +917,8 @@ useEffect(() => {
                 {/* Pooled Accounts Section */}
                 {filteredPooledAccounts.length > 0 && (
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-4">
+                      <div className="flex items-center flex-wrap">
                         <button
                           onClick={() => toggleSection("pooled")}
                           className="mr-3 text-gray-600 hover:text-gray-800"
@@ -931,7 +931,7 @@ useEffect(() => {
                             }
                           />
                         </button>
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                           <FontAwesomeIcon
                             icon={faUsers}
                             className="mr-2 text-indigo-500"
@@ -949,7 +949,7 @@ useEffect(() => {
                           <FontAwesomeIcon icon={faCircleInfo} />
                         </button>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs sm:text-sm text-gray-500 ml-8 sm:ml-0">
                         Shared accounts with virtual IBANs
                       </div>
                     </div>
@@ -1082,10 +1082,10 @@ useEffect(() => {
             !remittanceOnlyAccepted ? (
             <div className="mb-8">
               <div className="text-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
                   Premium Currency Packages
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   Choose a package that fits your international needs
                 </p>
               </div>
@@ -1102,7 +1102,7 @@ useEffect(() => {
                   return (
                     <div
                       key={pkg.package_id}
-                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-6 transition-all hover:shadow-md ${isActivePackage
+                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-4 sm:p-6 transition-all hover:shadow-md ${isActivePackage
                         ? "border-blue-500 ring-2 ring-blue-100 shadow-sm"
                         : "border-slate-200"
                         } ${!isPackageCompatible && selectedCount > 0
@@ -1116,10 +1116,10 @@ useEffect(() => {
                       }}
                     >
                       {/* Package Header */}
-                      <div className="flex justify-between items-start mb-6">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-xl font-bold text-gray-900">
+                          <div className="flex items-center flex-wrap gap-3 mb-2">
+                            <h4 className="text-lg sm:text-xl font-bold text-gray-900">
                               {pkg.package_name}
                             </h4>
                             <span
@@ -1175,8 +1175,8 @@ useEffect(() => {
                         </div>
 
                         {/* Price Section */}
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-left sm:text-right shrink-0">
+                          <div className="text-xl sm:text-2xl font-bold text-blue-600">
                             {pkg.package_fee} {pkg.package_currency}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -1185,7 +1185,7 @@ useEffect(() => {
                               : "Monthly fee"}
                           </div>
                           {isActivePackage && (
-                            <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                            <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded inline-block">
                               Your current selection
                             </div>
                           )}
@@ -1194,17 +1194,17 @@ useEffect(() => {
 
                       {/* Currencies Grid */}
                       <div className="mb-6">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
                           <h5 className="font-medium text-gray-700">
                             Available Currencies ({pkg.currencies?.length || 0})
                           </h5>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs sm:text-sm text-gray-500">
                             Select up to {pkg.package_accountCount} currency
                             {pkg.package_accountCount !== 1 ? "s" : ""}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                           {pkg.currencies?.map((curr) => {
                             const isSel = selectedPackageCurrencies.includes(
                               curr.currency_id,
@@ -1328,7 +1328,7 @@ useEffect(() => {
               {/* Package Selection Summary */}
               {selectedPackageCurrencies.length > 0 && (
                 <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <h4 className="font-bold text-gray-900">
                         Your Package Selection
@@ -1339,7 +1339,7 @@ useEffect(() => {
                         {selectedPackageCurrencies.length !== 1 ? "s" : ""}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       {monthlyCharge ? (
                         <>
                           <div className="text-lg font-bold text-blue-600">

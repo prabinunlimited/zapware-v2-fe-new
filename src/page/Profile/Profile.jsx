@@ -103,16 +103,16 @@ const ExpiredIdAlertModal = ({ isOpen, onClose, onAction, alertData }) => {
   const { isExpired, isDocumentMissing, expiryDate } = alertData;
 
   // Set accurate title and description according to the conditions
-    let title = "Action Required: Document Missing";
-    let description = "No ID document has been uploaded for your profile. Please upload a valid document.";
-  
-    if (isExpired && isDocumentMissing) {
-      title = "Action Required: ID Expired & Document Missing";
-      description = "Your ID Document has expired and no document is uploaded. Please update and upload your document.";
-    } else if (isExpired) {
-      title = "Action Required: ID Expired";
-      description = "Your ID document has expired. Please update your document.";
-    }
+  let title = "Action Required: Document Missing";
+  let description = "No ID document has been uploaded for your profile. Please upload a valid document.";
+
+  if (isExpired && isDocumentMissing) {
+    title = "Action Required: ID Expired & Document Missing";
+    description = "Your ID Document has expired and no document is uploaded. Please update and upload your document.";
+  } else if (isExpired) {
+    title = "Action Required: ID Expired";
+    description = "Your ID document has expired. Please update your document.";
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -215,6 +215,63 @@ const ExpiredIdAlertModal = ({ isOpen, onClose, onAction, alertData }) => {
             Update Document
           </button>
         </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
+const InvalidExpiryDateModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-rose-100 overflow-hidden z-10"
+      >
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-rose-50/80 via-amber-50/40 to-transparent pointer-events-none" />
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 transition-colors p-2 rounded-full focus:outline-none"
+          aria-label="Close modal"
+        >
+          <FaTimesCircle className="w-4 h-4" />
+        </button>
+
+        <div className="relative mx-auto w-16 h-16 mb-4 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-rose-100 animate-ping opacity-30" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/25">
+            <FaCalendarAlt className="w-7 h-7 text-white" />
+          </div>
+        </div>
+
+        <h3 className="text-xl font-extrabold text-slate-800 tracking-tight mb-2">
+          Invalid Expiry Date
+        </h3>
+        <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto mb-6">
+          The expiry date can't be in the past. Please choose a date that is today or later.
+        </p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-3 px-4 text-sm font-semibold text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 shadow-md hover:shadow-lg shadow-rose-500/20 rounded-xl transition-all"
+        >
+          Got It
+        </button>
       </motion.div>
     </div>,
     document.body
@@ -367,6 +424,8 @@ const Profile = () => {
   const [newIdIssuingCountryId, setNewIdIssuingCountryId] = useState("");
   const [newIdIssueDate, setNewIdIssueDate] = useState("");
   const [newIdExpiryDate, setNewIdExpiryDate] = useState("");
+  const [expiryDateError, setExpiryDateError] = useState("");
+  const [showInvalidExpiryModal, setShowInvalidExpiryModal] = useState(false);
   const [newIdFile, setNewIdFile] = useState(null);
   const [newIdUploadLoading, setNewIdUploadLoading] = useState(false);
 
@@ -404,6 +463,8 @@ const Profile = () => {
   const tabScrollRef = React.useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const expiryDateDebounceRef = React.useRef(null);
 
   const checkTabScroll = () => {
     const el = tabScrollRef.current;
@@ -501,6 +562,15 @@ const Profile = () => {
     }
     return () => clearInterval(interval);
   }, [emailPasscodeResendTimer]);
+
+  // Cleanup pending expiry-date validation timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (expiryDateDebounceRef.current) {
+        clearTimeout(expiryDateDebounceRef.current);
+      }
+    };
+  }, []);
 
   // =============== FIX: Fetch profile data if missing in Redux ===============
   useEffect(() => {
@@ -1035,6 +1105,7 @@ const Profile = () => {
         setSelectedOccupation(occ ? { value: occ.id, label: occ.name } : null);
       }
     }
+    setExpiryDateError("");
     setIsEditing((prev) => !prev);
   };
 
@@ -1830,6 +1901,37 @@ const Profile = () => {
     }
   };
 
+  const validateExpiryDate = (value) => {
+    if (!value || value.length < 10) return;
+
+    const selected = new Date(value);
+    if (isNaN(selected.getTime())) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selected < today) {
+      setExpiryDateError("Expiry date cannot be in the past.");
+      setShowInvalidExpiryModal(true);
+    } else {
+      setExpiryDateError("");
+    }
+  };
+
+  const handleExpiryDateChange = (updateValue) => (e) => {
+    const value = e.target.value;
+    updateValue(value);
+    setExpiryDateError("");
+
+    if (expiryDateDebounceRef.current) {
+      clearTimeout(expiryDateDebounceRef.current);
+    }
+    expiryDateDebounceRef.current = setTimeout(() => {
+      validateExpiryDate(value);
+    }, 600);
+  };
+
+
   const handleUploadNewId = async () => {
     if (!newIdDocumentTypeId || !newIdDocumentNumber || !newIdIssuingCountryId || !newIdIssueDate || !newIdExpiryDate || !newIdFile) {
       setModalData({
@@ -1842,6 +1944,10 @@ const Profile = () => {
       return;
     }
 
+    if (expiryDateError) {
+      setShowInvalidExpiryModal(true);
+      return;
+    }
     setNewIdUploadLoading(true);
 
     try {
@@ -2125,6 +2231,11 @@ const Profile = () => {
   const handleSaveChanges = async () => {
     if (!authtoken || !customerId) {
       console.error("❌ Profile: Missing auth token or customer ID for save");
+      return;
+    }
+
+    if (expiryDateError) {
+      setShowInvalidExpiryModal(true);
       return;
     }
 
@@ -3596,6 +3707,10 @@ const Profile = () => {
         onAction={handleGoToUpdateId}
         alertData={docAlertState}
       />
+        <InvalidExpiryDateModal
+        isOpen={showInvalidExpiryModal}
+        onClose={() => setShowInvalidExpiryModal(false)}
+      />
       {/* Change Email/Mobile Modal */}
       {isChangeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -4899,8 +5014,12 @@ const Profile = () => {
                             type="date"
                             name="id_expiry_date"
                             value={editableData.id_expiry_date}
-                            onChange={handleInputChange}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            onChange={handleExpiryDateChange((value) =>
+                              setEditableData((prev) => ({ ...prev, id_expiry_date: value }))
+                            )}
+                            min={new Date().toISOString().split("T")[0]}
+                            className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${expiryDateError ? "border-red-500 bg-red-50" : "border-gray-300"
+                              }`}
                           />
                         ) : (
                           <span className="text-sm font-medium text-gray-800 block py-2">
@@ -5015,8 +5134,10 @@ const Profile = () => {
                       <input
                         type="date"
                         value={newIdExpiryDate}
-                        onChange={(e) => setNewIdExpiryDate(e.target.value)}
-                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        onChange={handleExpiryDateChange(setNewIdExpiryDate)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${expiryDateError ? "border-red-500 bg-red-50" : "border-gray-300"
+                          }`}
                       />
                     </div>
                     <div>
@@ -5039,7 +5160,7 @@ const Profile = () => {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleUploadNewId}
-                      disabled={newIdUploadLoading}
+                      disabled={newIdUploadLoading || !!expiryDateError}
                       className={`text-white text-sm font-medium py-2 px-5 rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
                       style={headerColorProps.style}
                     >
@@ -5369,7 +5490,7 @@ const Profile = () => {
                 whileTap={{ scale: 0.95 }}
                 className="py-2.5 px-5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center justify-center min-w-32"
                 onClick={handleSaveChanges}
-                disabled={saveLoading}
+                disabled={saveLoading || !!expiryDateError}
               >
                 {saveLoading ? (
                   <RingLoader size={16} color="#ffffff" />
