@@ -437,6 +437,16 @@ const Profile = () => {
     return localStorage.getItem("customer_uuid") || localStorage.getItem("customerUuid");
   };
 
+  const extractErrorMessage = (message) => {
+    if (!message) return null;
+    if (typeof message === "string") return message;
+    if (typeof message === "object") {
+      const allMessages = Object.values(message).flat();
+      return allMessages.length > 0 ? allMessages.join(" ") : null;
+    }
+    return String(message);
+  };
+
   // Check if account type is individual
   const isIndividualAccount = useMemo(() => {
     return profileData?.customer_type?.toLowerCase() === "individual";
@@ -463,8 +473,6 @@ const Profile = () => {
   const tabScrollRef = React.useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-
-  const expiryDateDebounceRef = React.useRef(null);
 
   const checkTabScroll = () => {
     const el = tabScrollRef.current;
@@ -562,15 +570,6 @@ const Profile = () => {
     }
     return () => clearInterval(interval);
   }, [emailPasscodeResendTimer]);
-
-  // Cleanup pending expiry-date validation timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (expiryDateDebounceRef.current) {
-        clearTimeout(expiryDateDebounceRef.current);
-      }
-    };
-  }, []);
 
   // =============== FIX: Fetch profile data if missing in Redux ===============
   useEffect(() => {
@@ -1886,11 +1885,11 @@ const Profile = () => {
   const handleNewIdFileChange = (event) => {
     const file = event.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
+      if (file.size > 2 * 1024 * 1024) {
         setModalData({
           isOpen: true,
           title: "File Too Large",
-          message: "Please upload a file smaller than 10MB.",
+          message: "Please upload a file up to 2MB in size.",
           type: "error",
         });
         setIsModalOpen(true);
@@ -1902,10 +1901,18 @@ const Profile = () => {
   };
 
   const validateExpiryDate = (value) => {
-    if (!value || value.length < 10) return;
+    if (!value || value.length < 10) {
+      setExpiryDateError("Please select an expiry date.");
+      setShowInvalidExpiryModal(true);
+      return false;
+    }
 
     const selected = new Date(value);
-    if (isNaN(selected.getTime())) return;
+    if (isNaN(selected.getTime())) {
+      setExpiryDateError("Please enter a valid date.");
+      setShowInvalidExpiryModal(true);
+      return false;
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1913,24 +1920,18 @@ const Profile = () => {
     if (selected < today) {
       setExpiryDateError("Expiry date cannot be in the past.");
       setShowInvalidExpiryModal(true);
-    } else {
-      setExpiryDateError("");
+      return false;
     }
+
+    setExpiryDateError("");
+    return true;
   };
 
   const handleExpiryDateChange = (updateValue) => (e) => {
     const value = e.target.value;
     updateValue(value);
     setExpiryDateError("");
-
-    if (expiryDateDebounceRef.current) {
-      clearTimeout(expiryDateDebounceRef.current);
-    }
-    expiryDateDebounceRef.current = setTimeout(() => {
-      validateExpiryDate(value);
-    }, 600);
   };
-
 
   const handleUploadNewId = async () => {
     if (!newIdDocumentTypeId || !newIdDocumentNumber || !newIdIssuingCountryId || !newIdIssueDate || !newIdExpiryDate || !newIdFile) {
@@ -1944,8 +1945,7 @@ const Profile = () => {
       return;
     }
 
-    if (expiryDateError) {
-      setShowInvalidExpiryModal(true);
+    if (!validateExpiryDate(newIdExpiryDate)) {
       return;
     }
     setNewIdUploadLoading(true);
@@ -1994,14 +1994,14 @@ const Profile = () => {
           dispatch(fetchUserProfile({ customerId, bearertoken }));
         }
       } else {
-        throw new Error(response.data.message || "Failed to upload ID");
+        throw new Error(extractErrorMessage(response.data.message) || "Failed to upload ID");
       }
     } catch (err) {
       console.error("❌ Failed to upload new ID:", err);
       setModalData({
         isOpen: true,
         title: "Upload Failed",
-        message: err.response?.data?.message || err.message || "Failed to upload ID. Please try again.",
+        message: extractErrorMessage(err.response?.data?.message) || err.message || "Failed to upload ID. Please try again.",
         type: "error",
       });
       setIsModalOpen(true);
@@ -2234,8 +2234,7 @@ const Profile = () => {
       return;
     }
 
-    if (expiryDateError) {
-      setShowInvalidExpiryModal(true);
+    if (isIndividualAccount && !validateExpiryDate(editableData.id_expiry_date)) {
       return;
     }
 
@@ -3707,7 +3706,7 @@ const Profile = () => {
         onAction={handleGoToUpdateId}
         alertData={docAlertState}
       />
-        <InvalidExpiryDateModal
+      <InvalidExpiryDateModal
         isOpen={showInvalidExpiryModal}
         onClose={() => setShowInvalidExpiryModal(false)}
       />
@@ -5028,17 +5027,19 @@ const Profile = () => {
                         )}
                       </div>
 
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-1">Document</label>
-                        <button
-                          type="button"
-                          onClick={handleViewDocument}
-                          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 py-2"
-                        >
-                          <FaEye className="w-3.5 h-3.5" />
-                          View Document
-                        </button>
-                      </div>
+                      {!isEditing && (
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Document</label>
+                          <button
+                            type="button"
+                            onClick={handleViewDocument}
+                            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 py-2"
+                          >
+                            <FaEye className="w-3.5 h-3.5" />
+                            View Document
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -5160,7 +5161,7 @@ const Profile = () => {
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={handleUploadNewId}
-                      disabled={newIdUploadLoading || !!expiryDateError}
+                      disabled={newIdUploadLoading}
                       className={`text-white text-sm font-medium py-2 px-5 rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
                       style={headerColorProps.style}
                     >
@@ -5490,7 +5491,7 @@ const Profile = () => {
                 whileTap={{ scale: 0.95 }}
                 className="py-2.5 px-5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center justify-center min-w-32"
                 onClick={handleSaveChanges}
-                disabled={saveLoading || !!expiryDateError}
+                disabled={saveLoading}
               >
                 {saveLoading ? (
                   <RingLoader size={16} color="#ffffff" />
