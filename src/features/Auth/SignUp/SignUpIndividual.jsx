@@ -392,7 +392,7 @@ function SignUpIndividualContent() {
   // State declarations
   const [isClient, setIsClient] = useState(false);
   const [initializationError, setInitializationError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [initialDataLoading, setInitialDataLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [registrationDataLoaded, setRegistrationDataLoaded] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -470,48 +470,6 @@ function SignUpIndividualContent() {
     selectedAccounts,
     accountOptions,
   ]);
-
-  useEffect(() => {
-    const fetchOccupations = async () => {
-      try {
-        setOccupationsLoading(true);
-
-        // Get the bearer token from localStorage
-        const bearertoken = localStorage.getItem("bearertoken");
-
-        console.log("🔄 Fetching occupations from:", `${API_URL}/customers/fetch-occupation`);
-
-        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
-          headers: {
-            'Authorization': `Bearer ${bearertoken}`,
-            'Content-Type': 'application/json',
-          }
-        });
-
-        console.log("✅ API Response:", response.data);
-
-        // Extract the occupations array from response.data.data
-        if (response.data?.data && Array.isArray(response.data.data)) {
-          setOccupations(response.data.data);
-          console.log("✅ Occupations set:", response.data.data);
-        } else if (Array.isArray(response.data)) {
-          setOccupations(response.data);
-        } else {
-          console.warn("Unexpected response structure:", response.data);
-          setOccupations([]);
-        }
-
-      } catch (error) {
-        console.error("❌ Failed to fetch occupations:", error);
-        console.error("Error details:", error.response?.data || error.message);
-        setOccupations([]);
-      } finally {
-        setOccupationsLoading(false);
-      }
-    };
-
-    fetchOccupations();
-  }, []);
 
   const dispatch = useDispatch();
   const location = useLocation();
@@ -1191,185 +1149,60 @@ function SignUpIndividualContent() {
   };
 
   // Initialize data
-  const initializedRef = useRef(false);
+  const initialLoadRef = useRef(false);
 
   useEffect(() => {
     setIsClient(true);
 
-    // Skip if already initialized
-    if (initializedRef.current) {
-      console.log("🔄 Already initialized, skipping");
-      setIsLoading(false);
+    // If already triggered once, do nothing and let the requests finish
+    if (initialLoadRef.current) {
       return;
     }
+    initialLoadRef.current = true;
 
-    let isMounted = true;
+    // Sync account status
+    dispatch(setMetadataField({ field: "hasNamedAccounts", value: isNamedAccount || false }));
+    dispatch(setMetadataField({ field: "isUSDSelected", value: isNamedAccount || false }));
+    dispatch(setMetadataField({ field: "isNamedAccount", value: isNamedAccount || false }));
 
     const initializeData = async () => {
       try {
-        if (isMounted) {
-          setIsLoading(true);
-          setInitializationError(null);
-        }
+        const bearertoken = localStorage.getItem("bearertoken");
 
-        console.log("🔍 [initializeData] Starting initialization", {
-          hasLocationState: !!location.state,
-          service_provide_ids: service_provide_ids,
-          accountOptions: locationAccountOptions,
-          isNamedAccount,
-        });
+        const primaryFetches = [
+          dispatch(fetchCountries()).unwrap().catch(() => []),
+          dispatch(fetchNationalities()).unwrap().catch(() => []),
+          dispatch(fetchIdDocumentTypes()).unwrap().catch(() => []),
+          dispatch(fetchTermsAndConditions()).unwrap().catch(() => []),
+          axios
+            .get(`${API_URL}/customers/fetch-occupation`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setOccupations(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setOccupations(res.data);
+              }
+            })
+            .catch(() => setOccupations([])),
+        ];
 
-        // Sync USD named account status to signupSlice for backward compatibility
-        dispatch(
-          setMetadataField({
-            field: "hasNamedAccounts",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        dispatch(
-          setMetadataField({
-            field: "isUSDSelected",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        // Sync isNamedAccount field for SSN logic
-        dispatch(
-          setMetadataField({
-            field: "isNamedAccount",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        // Get partner token if needed
-        try {
-          console.log("🔄 Attempting to get partner token...");
-          const { getBearerToken } =
-            await import("../../../services/authService");
-          const token = await getBearerToken();
-          console.log("✅ Partner token obtained:", token ? "Yes" : "No");
-        } catch (tokenError) {
-          console.error("❌ Failed to get partner token:", tokenError.message);
-        }
-
-        // Check what data we need to fetch
-        const apiPromises = [];
-
-        if (countries.length === 0) {
-          apiPromises.push(
-            dispatch(fetchCountries())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ Countries fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Countries already loaded:", countries.length);
-        }
-
-        if (nationalities.length === 0) {
-          apiPromises.push(
-            dispatch(fetchNationalities())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ Nationalities fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Nationalities already loaded:", nationalities.length);
-        }
-
-        if (idDocumentTypes.length === 0) {
-          apiPromises.push(
-            dispatch(fetchIdDocumentTypes())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ ID Document Types fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log(
-            "✅ ID Document Types already loaded:",
-            idDocumentTypes.length,
-          );
-        }
-
-        if (!termsFetched) {
-          console.log("📡 Fetching terms and conditions...");
-          apiPromises.push(
-            dispatch(fetchTermsAndConditions())
-              .unwrap()
-              .then((terms) => {
-                console.log(
-                  "✅ Terms fetched successfully:",
-                  terms?.length || 0,
-                );
-                return terms;
-              })
-              .catch((error) => {
-                console.error("❌ Terms fetch error in component:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Terms already fetched");
-        }
-
-        // Execute API calls if needed
-        if (apiPromises.length > 0) {
-          console.log("🚀 Executing", apiPromises.length, "API calls...");
-          const timeoutPromise = new Promise((resolve) =>
-            setTimeout(() => {
-              console.log("⏰ API timeout after 30 seconds");
-              resolve("timeout");
-            }, 30000),
-          );
-
-          const results = await Promise.race([
-            Promise.allSettled(apiPromises),
-            timeoutPromise,
-          ]);
-
-          if (results === "timeout") {
-            console.warn("⚠️ Some API calls timed out");
-          } else {
-            console.log("✅ All API calls completed:", results);
-          }
-        } else {
-          console.log("✅ No API calls needed - all data already loaded");
-        }
-
-        // Mark as initialized and finish loading
-        if (isMounted) {
-          initializedRef.current = true;
-          setIsLoading(false);
-          console.log("✅ Initialization complete");
-        }
+        // Wait until ALL 5 APIs have completely finished
+        await Promise.allSettled(primaryFetches);
       } catch (error) {
-        console.error("❌ Initialization error:", error);
-        if (isMounted) {
-          setInitializationError(error.message);
-          setIsLoading(false);
-        }
+        console.error("Initialization error:", error);
+      } finally {
+        // ONLY turn off loading once everything has finished
+        setInitialDataLoading(false);
       }
     };
 
-    // Run initialization if we have location state
-    if (location.state) {
-      initializeData();
-    } else {
-      setIsLoading(false);
-    }
-
-    // Cleanup function
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    initializeData();
+  }, [dispatch, isNamedAccount]);
 
   // Handle errors
   useEffect(() => {
@@ -2065,13 +1898,13 @@ function SignUpIndividualContent() {
     );
   }
 
-  if (isLoading) {
+  if (!isClient || initialDataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
-          <RingLoader color="#3b82f6" size={50} />
-          <p className="mt-4 text-gray-600">Loading registration form...</p>
-        </div>
+      <div className="fixed inset-0 bg-white z-[60] flex flex-col justify-center items-center">
+        <RingLoader color="#3b82f6" size={60} loading={true} />
+        <p className="mt-4 text-gray-600 font-medium text-lg">
+          Loading registration form...
+        </p>
       </div>
     );
   }
