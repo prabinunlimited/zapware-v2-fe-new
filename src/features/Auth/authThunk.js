@@ -399,6 +399,21 @@ export const verifyPasscode = createAsyncThunk(
           };
         }
 
+        // CASE 3a: Non-Remittance Customer, KYC pending but no Plaid action required - just show message
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y" &&
+          responseData.plaid_kyc_required === "N") {
+
+          return {
+            isAccountPending: true,
+            kyc_status: responseData.kyc_status,
+            isRemittanceOnlyCustomer: "N",
+            plaid_message: responseData.plaid_message,
+            customer_id: responseData.customer_id,
+            // ❌ NO token, NO redirect
+          };
+        }
+
         // CASE 3: Non-Remittance Customer with Pending KYC - Redirect to Plaid (Open in new tab)
         if (responseData.kyc_status === "0" &&
           responseData.isRemittanceOnlyCustomer !== "Y") {
@@ -710,6 +725,21 @@ export const verifyOTP = createAsyncThunk(
           };
         }
 
+        // CASE 1b: Non-Remittance Customer, KYC pending but no Plaid action required - just show message
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y" &&
+          responseData.plaid_kyc_required === "N") {
+
+          return {
+            isAccountPending: true,
+            kyc_status: "0",
+            isRemittanceOnlyCustomer: "N",
+            plaid_message: responseData.plaid_message,
+            customer_id: responseData.customer_id,
+            // ❌ NO token, NO redirect
+          };
+        }
+
         // CASE 2: KYC Pending for Non-Remittance Customer - Redirect to Plaid, DON'T login
         if (responseData.kyc_status === "0" &&
           responseData.isRemittanceOnlyCustomer !== "Y") {
@@ -792,7 +822,6 @@ export const verifyOTP = createAsyncThunk(
     }
   }
 );
-
 // ===================== SEND OTP =====================
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
@@ -1351,6 +1380,8 @@ export const loginUser = createAsyncThunk(
           kyc_status,
           bank_approve_status,
           plaid_link_url,
+          plaid_kyc_required,
+          plaid_message,
           customerUuid,
           beneficaryLogin,
           beneficaryId,
@@ -1389,6 +1420,14 @@ export const loginUser = createAsyncThunk(
         }
 
         if (kyc_status === "0" || kyc_status === 0) {
+          if (plaid_kyc_required === "N") {
+            return {
+              isAccountPending: true,
+              plaid_message,
+              customer_id,
+            };
+          }
+
           if (!plaid_link_url) {
             throw new Error(
               "Bank verification required but link not available"
