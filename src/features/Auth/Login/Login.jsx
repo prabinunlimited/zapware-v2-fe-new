@@ -499,6 +499,21 @@ const Login = () => {
       return response;
     }
 
+    // Account application pending, no Plaid action needed - just show message
+    if (response.isAccountPending) {
+      dispatch(
+        openModal({
+          title: "Account Application Pending",
+          message: response.plaid_message,
+          type: "warning",
+          modalProps: {
+            showCloseButton: true,
+          },
+        })
+      );
+      return null;
+    }
+
     if (response.requiresPlaidRedirect && response.plaidUrl) {
       // Store data
       const pendingAuth = {
@@ -1501,6 +1516,25 @@ const Login = () => {
         return;
       }
 
+      // NEW: Case 1b - Non-Remittance Customer, KYC pending but no Plaid action required (Show message, NO redirect)
+      if (result.isAccountPending) {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Account Application Pending",
+            message: result.plaid_message,
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
       // NEW: Case 2 - Non-Remittance Customer with Pending KYC (Redirect to Plaid in new tab)
       if (result.requiresPlaidRedirect && result.plaidUrl) {
         dispatch(setShowPasscodeInput(false));
@@ -1730,6 +1764,25 @@ const Login = () => {
           openModal({
             title: "Account Application Pending",
             message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
+      // CASE 1b: Non-Remittance Customer, KYC pending but no Plaid action required - Show message, NO redirect
+      if (result.isAccountPending) {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Account Application Pending",
+            message: result.plaid_message,
             type: "warning",
             modalProps: {
               showCloseButton: true,

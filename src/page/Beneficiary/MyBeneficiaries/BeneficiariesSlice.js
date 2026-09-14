@@ -726,11 +726,11 @@ export const fetchBeneficiaryByCode = createAsyncThunk(
 
 export const fetchBeneficiaryBanks = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryBanks",
-  async (beneficiaryId, { rejectWithValue }) => {
+  async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${API_URL}/beneficiaries/benef-all-bank/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/benef-all-banks/${customerId}/${beneficiaryId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -744,7 +744,7 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
       }
 
       const result = await response.json();
-      return result.bank_accounts || [];
+      return result.bank_accounts || result.data || [];
     } catch (error) {
       return rejectWithValue(error.message);
     }
