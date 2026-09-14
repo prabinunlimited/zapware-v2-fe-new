@@ -3228,7 +3228,7 @@ const Institution = () => {
                     touched={touched.controller_nationality}
                     error={errors.controller_nationality}
                     isMandatory={isFieldMandatory(resolveApiFieldName("controller_nationality"), values)}
-                    isCountryField={true}
+                    isCountryField={false}
                     showPhoneCode={false}
                   />
 
