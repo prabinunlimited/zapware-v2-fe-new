@@ -30,6 +30,7 @@ import {
   verifyOTP,
   downloadManual,
   resendOtpLogin,
+  resendPasscodeLogin,
 } from "../../Auth/authThunk";
 
 // Selectors
@@ -176,6 +177,23 @@ const Login = () => {
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
   };
+
+  // State for resend Passcode login & dynamic countdown
+  const [passcodeLoginUserId, setPasscodeLoginUserId] = useState(null);
+  const [passcodeLoginUserType, setPasscodeLoginUserType] = useState(null);
+  const [passcodeCooldown, setPasscodeCooldown] = useState(0);
+  const [isResendingPasscode, setIsResendingPasscode] = useState(false);
+
+  // Dynamic countdown timer for Passcode
+  useEffect(() => {
+    if (passcodeCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setPasscodeCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [passcodeCooldown]);
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -1005,6 +1023,20 @@ const Login = () => {
         return;
       }
 
+      // Capture response data from request-passcode-login
+      if (result.data) {
+        if (result.data.login_request_user_id) {
+          setPasscodeLoginUserId(result.data.login_request_user_id);
+        }
+        if (result.data.login_request_user_type) {
+          setPasscodeLoginUserType(result.data.login_request_user_type);
+          setSelectedUserType(result.data.login_request_user_type);
+        }
+        if (result.data.resend_minutes) {
+          setPasscodeCooldown(Number(result.data.resend_minutes) * 60);
+        }
+      }
+
       dispatch(setShowPasscodeInput(true));
       dispatch(setPasscodeSent(true));
       dispatch(setPasscode(new Array(6).fill("")));
@@ -1248,6 +1280,54 @@ const Login = () => {
     }
   };
 
+  const handleResendPasscode = async () => {
+    if (isResendingPasscode || passcodeCooldown > 0) return;
+
+    if (!passcodeLoginUserId || !passcodeLoginUserType) {
+      handleGeneratePasscode({ preventDefault: () => { } });
+      return;
+    }
+
+    setIsResendingPasscode(true);
+
+    try {
+      const payload = {
+        login_request_user_id: passcodeLoginUserId,
+        login_request_user_type: passcodeLoginUserType,
+      };
+
+      const result = await dispatch(resendPasscodeLogin(payload)).unwrap();
+
+      // Set countdown dynamically from returned resend_minutes
+      const minutes = result.data?.resend_minutes || 1;
+      setPasscodeCooldown(Number(minutes) * 60);
+
+      dispatch(setPasscode(new Array(6).fill("")));
+
+      dispatch(
+        openModal({
+          title: "Success",
+          message: result.message || "Passcode resent successfully.",
+          type: "success",
+          modalProps: {
+            autoClose: true,
+            autoCloseDelay: 3000,
+          },
+        })
+      );
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: typeof error === "string" ? error : error?.message || "Failed to resend passcode",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsResendingPasscode(false);
+    }
+  };
+
   const handleConfirmUserType = async () => {
     if (!selectedUserType || !pendingUserTypeFlowRef.current) return;
 
@@ -1263,7 +1343,20 @@ const Login = () => {
     try {
       if (flow === "passcode") {
         dispatch(setLoading(true));
-        await dispatch(generatePasscode(payload)).unwrap();
+        const result = await dispatch(generatePasscode(payload)).unwrap();
+
+        if (result.data) {
+          if (result.data.login_request_user_id) {
+            setPasscodeLoginUserId(result.data.login_request_user_id);
+          }
+          if (result.data.login_request_user_type) {
+            setPasscodeLoginUserType(result.data.login_request_user_type);
+            setSelectedUserType(result.data.login_request_user_type); // Keeps selected user type synced
+          }
+          if (result.data.resend_minutes) {
+            setPasscodeCooldown(Number(result.data.resend_minutes) * 60);
+          }
+        }
 
         dispatch(setShowPasscodeInput(true));
         dispatch(setPasscodeSent(true));
@@ -1272,7 +1365,9 @@ const Login = () => {
         dispatch(
           openModal({
             title: "Passcode Sent",
-            message: "A 6-digit passcode has been sent to your email address.",
+            message:
+              result.message ||
+              "A 6-digit passcode has been sent to your email address.",
             type: "success",
             modalProps: {
               autoClose: true,
@@ -2872,15 +2967,17 @@ const Login = () => {
               </p>
               <button
                 type="button"
-                onClick={handleGeneratePasscode}
-                className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto"
-                disabled={isGeneratingPasscode}
+                onClick={handleResendPasscode}
+                className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto disabled:text-gray-400 disabled:cursor-not-allowed"
+                disabled={isGeneratingPasscode || isVerifyingPasscode || isResendingPasscode || passcodeCooldown > 0}
               >
-                {isGeneratingPasscode ? (
+                {isResendingPasscode ? (
                   <>
                     <RingLoader size={16} color="#3b82f6" />
                     <span>Resending...</span>
                   </>
+                ) : passcodeCooldown > 0 ? (
+                  `Resend Code in ${formatTimer(passcodeCooldown)}`
                 ) : (
                   "Resend Verification Code"
                 )}
