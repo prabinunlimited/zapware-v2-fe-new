@@ -430,15 +430,15 @@ const FIELD_STYLES = {
 };
 
 const BACKUP_KEY = "institution_registration_backup";
-const BACKUP_EXPIRY_HOURS = 1;
+const BACKUP_EXPIRY_MINUTES = 5;
 
 const loadBackup = () => {
   try {
     const raw = sessionStorage.getItem(BACKUP_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const diffHours = (new Date() - new Date(parsed.timestamp)) / (1000 * 60 * 60);
-    if (diffHours >= BACKUP_EXPIRY_HOURS) {
+    const diffMinutes = (new Date() - new Date(parsed.timestamp)) / (1000 * 60);
+    if (diffMinutes >= BACKUP_EXPIRY_MINUTES) {
       sessionStorage.removeItem(BACKUP_KEY);
       return null;
     }
@@ -1190,26 +1190,26 @@ const Institution = () => {
 
   const handleResendCode = async (email) => {
     if (resendCountdown > 0 || isResending) return;
-  
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email || !emailRegex.test(email)) {
       toast.error("Please enter a valid email address");
       return;
     }
-  
+
     const partnerIdStr = localStorage.getItem("whitelabelledpartnerid");
     const partnerId = partnerIdStr ? parseInt(partnerIdStr, 10) : null;
-  
+
     const payload = {
       request_user_email: email,
       request_user_type: "customer",
       partner_id: partnerId,
     };
-  
+
     try {
       setIsResending(true);
       const token = localStorage.getItem("bearertoken");
-  
+
       const response = await fetch(`${API_URL}/resend-passcode-registration`, {
         method: "POST",
         headers: {
@@ -1218,9 +1218,9 @@ const Institution = () => {
         },
         body: JSON.stringify(payload),
       });
-  
+
       const data = await response.json();
-  
+
       if (response.ok && (data?.status === "success" || data?.success === true)) {
         toast.success(data?.message || "Passcode resent successfully!");
         const resendMinutes = data?.data?.resend_minutes ?? 1;
@@ -6595,7 +6595,6 @@ const Institution = () => {
                                   value={values.email || ""}
                                   onChange={(e) => {
                                     enhancedHandleChange("email", setFieldValue, setResponsiblePersonEmail)(e);
-                                    // Reset verification when email changes
                                     if (isResponsiblePersonEmailVerified) {
                                       dispatch(resetEmailVerification());
                                       setFieldValue("email_verified", false);
@@ -6603,7 +6602,7 @@ const Institution = () => {
                                   }}
                                   onBlur={handleBlur}
                                   onFocus={() => setActiveField("email")}
-                                  disabled={emailIsVerified}
+                                  disabled={false}
                                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
           ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
           ${touched.email && errors.email && !emailIsVerified
@@ -6630,11 +6629,11 @@ const Institution = () => {
                                     (showVerificationInput && resendCountdown > 0)
                                   }
                                   className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium min-w-[95px] ${isSendingCode ||
-                                      isResending ||
-                                      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "") ||
-                                      (showVerificationInput && resendCountdown > 0)
-                                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                                      : "bg-blue-600 text-white hover:bg-blue-700"
+                                    isResending ||
+                                    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "") ||
+                                    (showVerificationInput && resendCountdown > 0)
+                                    ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                                    : "bg-blue-600 text-white hover:bg-blue-700"
                                     }`}
                                 >
                                   {isSendingCode || isResending ? (
@@ -6652,10 +6651,17 @@ const Institution = () => {
 
                               {/* Verified Badge */}
                               {emailIsVerified && (
-                                <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    dispatch(resetEmailVerification());
+                                    setFieldValue("email_verified", false);
+                                  }}
+                                  className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium hover:bg-green-200"
+                                >
                                   <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                                   <span>Verified</span>
-                                </div>
+                                </button>
                               )}
                             </div>
 
@@ -6738,7 +6744,7 @@ const Institution = () => {
                                 </p>
                               )}
                             </div>
-                          )}  
+                          )}
                           <PasswordField
                             id="password"
                             label="Password"

@@ -2261,10 +2261,15 @@ function SignUpIndividualContent() {
                           name="email"
                           type="email"
                           placeholder="your.email@example.com"
-                          onChange={formik.handleChange}
+                          onChange={(e) => {
+                            formik.handleChange(e);
+                            if (isEmailVerified) {
+                              dispatch(resetEmailVerification());
+                            }
+                          }}
                           onBlur={formik.handleBlur}
                           value={formik.values.email}
-                          disabled={isEmailVerified}
+                          disabled={false}
                           className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
           ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
           ${formik.touched.email && formik.errors.email && !isEmailVerified
@@ -2303,10 +2308,14 @@ function SignUpIndividualContent() {
 
                       {/* Verified Badge */}
                       {isEmailVerified && (
-                        <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => dispatch(resetEmailVerification())}
+                          className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap hover:bg-green-200"
+                        >
                           <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                           <span className="font-medium">Verified</span>
-                        </div>
+                        </button>
                       )}
                     </div>
 
