@@ -430,15 +430,15 @@ const FIELD_STYLES = {
 };
 
 const BACKUP_KEY = "institution_registration_backup";
-const BACKUP_EXPIRY_HOURS = 1;
+const BACKUP_EXPIRY_MINUTES = 5;
 
 const loadBackup = () => {
   try {
     const raw = sessionStorage.getItem(BACKUP_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    const diffHours = (new Date() - new Date(parsed.timestamp)) / (1000 * 60 * 60);
-    if (diffHours >= BACKUP_EXPIRY_HOURS) {
+    const diffMinutes = (new Date() - new Date(parsed.timestamp)) / (1000 * 60);
+    if (diffMinutes >= BACKUP_EXPIRY_MINUTES) {
       sessionStorage.removeItem(BACKUP_KEY);
       return null;
     }
@@ -550,6 +550,20 @@ const Institution = () => {
   const showPhoneVerificationInput = useSelector(selectShowPhoneVerificationInput);
   const isPhoneSendingCode = useSelector(selectIsPhoneSendingCode);
   const isPhoneVerifying = useSelector(selectIsPhoneVerifying);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCountdown]);
 
   // === ADD SelectorDebug RIGHT HERE ===
   const SelectorDebug = () => {
@@ -1126,7 +1140,11 @@ const Institution = () => {
     try {
       const result = await dispatch(sendEmailVerificationPasscode(email));
       if (sendEmailVerificationPasscode.fulfilled.match(result)) {
-        toast.success("Verification code sent to your email!");
+        toast.success(result.payload?.message || "Verification code sent to your email!");
+
+        // Get resend_minutes from response
+        const resendMinutes = result.payload?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
       } else {
         toast.error(result.payload || "Failed to send verification code");
       }
@@ -1170,8 +1188,52 @@ const Institution = () => {
     }
   };
 
-  const handleResendCode = (email) => {
-    handleSendVerificationCode(email);
+  const handleResendCode = async (email) => {
+    if (resendCountdown > 0 || isResending) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    const partnerIdStr = localStorage.getItem("whitelabelledpartnerid");
+    const partnerId = partnerIdStr ? parseInt(partnerIdStr, 10) : null;
+
+    const payload = {
+      request_user_email: email,
+      request_user_type: "customer",
+      partner_id: partnerId,
+    };
+
+    try {
+      setIsResending(true);
+      const token = localStorage.getItem("bearertoken");
+
+      const response = await fetch(`${API_URL}/resend-passcode-registration`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && (data?.status === "success" || data?.success === true)) {
+        toast.success(data?.message || "Passcode resent successfully!");
+        const resendMinutes = data?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
+      } else {
+        toast.error(data?.message || "Failed to resend passcode");
+      }
+    } catch (error) {
+      console.error("Resend passcode error:", error);
+      toast.error("An error occurred while resending the code.");
+    } finally {
+      setIsResending(false);
+    }
   };
 
   const handleSendPhoneVerificationCode = async (countryCode, mobileNumber, setFieldValue) => {
@@ -3228,7 +3290,7 @@ const Institution = () => {
                     touched={touched.controller_nationality}
                     error={errors.controller_nationality}
                     isMandatory={isFieldMandatory(resolveApiFieldName("controller_nationality"), values)}
-                    isCountryField={true}
+                    isCountryField={false}
                     showPhoneCode={false}
                   />
 
@@ -6533,7 +6595,6 @@ const Institution = () => {
                                   value={values.email || ""}
                                   onChange={(e) => {
                                     enhancedHandleChange("email", setFieldValue, setResponsiblePersonEmail)(e);
-                                    // Reset verification when email changes
                                     if (isResponsiblePersonEmailVerified) {
                                       dispatch(resetEmailVerification());
                                       setFieldValue("email_verified", false);
@@ -6541,10 +6602,10 @@ const Institution = () => {
                                   }}
                                   onBlur={handleBlur}
                                   onFocus={() => setActiveField("email")}
-                                  // disabled={isResponsiblePersonEmailVerified}
+                                  disabled={false}
                                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 transition-all duration-200 
-              ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
-              ${touched.email && errors.email && !emailIsVerified
+          ${emailIsVerified ? 'bg-green-50 border-green-300' : ''}
+          ${touched.email && errors.email && !emailIsVerified
                                       ? "border-red-500 focus:ring-red-500"
                                       : "border-gray-300 focus:ring-blue-500"
                                     }`}
@@ -6552,34 +6613,55 @@ const Institution = () => {
                                 />
                               </div>
 
-                              {/* Verify Button - Only show when not verified */}
+                              {/* Verify / Resend Button */}
                               {!emailIsVerified && (
                                 <button
                                   type="button"
-                                  onClick={() => handleSendVerificationCode(values.email, setFieldValue)}
-                                  disabled={isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")}
-                                  className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium ${isSendingCode || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "")
+                                  onClick={() =>
+                                    showVerificationInput
+                                      ? handleResendCode(values.email)
+                                      : handleSendVerificationCode(values.email, setFieldValue)
+                                  }
+                                  disabled={
+                                    isSendingCode ||
+                                    isResending ||
+                                    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "") ||
+                                    (showVerificationInput && resendCountdown > 0)
+                                  }
+                                  className={`px-4 py-3 rounded-lg transition-all duration-300 whitespace-nowrap font-medium min-w-[95px] ${isSendingCode ||
+                                    isResending ||
+                                    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email || "") ||
+                                    (showVerificationInput && resendCountdown > 0)
                                     ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                                     : "bg-blue-600 text-white hover:bg-blue-700"
                                     }`}
                                 >
-                                  {isSendingCode ? (
+                                  {isSendingCode || isResending ? (
                                     <div className="flex items-center gap-2">
                                       <RingLoader size={16} color="#ffffff" />
                                       <span>Sending...</span>
                                     </div>
+                                  ) : showVerificationInput ? (
+                                    resendCountdown > 0 ? `Resend (${resendCountdown}s)` : "Resend"
                                   ) : (
-                                    'Verify'
+                                    "Verify"
                                   )}
                                 </button>
                               )}
 
-                              {/* Verified Badge - Show when verified instead of button */}
+                              {/* Verified Badge */}
                               {emailIsVerified && (
-                                <div className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    dispatch(resetEmailVerification());
+                                    setFieldValue("email_verified", false);
+                                  }}
+                                  className="px-4 py-3 bg-green-100 text-green-700 rounded-lg flex items-center gap-2 whitespace-nowrap font-medium hover:bg-green-200"
+                                >
                                   <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                                   <span>Verified</span>
-                                </div>
+                                </button>
                               )}
                             </div>
 
@@ -6612,7 +6694,11 @@ const Institution = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleVerifyEmailCode(values.email, setFieldValue)}
-                                  disabled={isVerifying || !emailVerification?.verificationCode || emailVerification?.verificationCode?.length !== 6}
+                                  disabled={
+                                    isVerifying ||
+                                    !emailVerification?.verificationCode ||
+                                    emailVerification?.verificationCode?.length !== 6
+                                  }
                                   className="px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
                                 >
                                   {isVerifying ? (
@@ -6621,20 +6707,24 @@ const Institution = () => {
                                       <span>Verifying...</span>
                                     </div>
                                   ) : (
-                                    'Submit'
+                                    "Submit"
                                   )}
                                 </button>
                               </div>
 
-                              {/* Resend link */}
+                              {/* Resend link with timer */}
                               <div className="mt-3 text-center">
                                 <button
                                   type="button"
                                   onClick={() => handleResendCode(values.email)}
-                                  disabled={isSendingCode}
+                                  disabled={isResending || resendCountdown > 0}
                                   className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                  {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                                  {isResending
+                                    ? "Sending..."
+                                    : resendCountdown > 0
+                                      ? `Didn't receive code? Resend in ${resendCountdown}s`
+                                      : "Didn't receive code? Resend"}
                                 </button>
                               </div>
 
