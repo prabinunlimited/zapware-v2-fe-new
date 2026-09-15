@@ -452,6 +452,20 @@ function SignUpIndividualContent() {
   const showPhoneVerificationInput = useSelector(selectShowPhoneVerificationInput);
   const isPhoneSendingCode = useSelector(selectIsPhoneSendingCode);
   const isPhoneVerifying = useSelector(selectIsPhoneVerifying);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCountdown]);
 
   useEffect(() => {
     console.log("🔍 Selector Debug:", {
@@ -1050,7 +1064,7 @@ function SignUpIndividualContent() {
         accept_sms: values.accept_sms || 0,
         accept_privacy_policy: values.accept_privacy_policy || 0,
         accept_disclosure: values.accept_disclosure || 0,
-        accept_fees: values.accept_fees || 0, 
+        accept_fees: values.accept_fees || 0,
         is_named_account: isNamedAccount,
         has_usd_named_account: isNamedAccount,
         selected_accounts: selectedAccounts,
@@ -1086,7 +1100,7 @@ function SignUpIndividualContent() {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
 
-          const resendMinutes = responseData.data?.resend_minutes ;
+          const resendMinutes = responseData.data?.resend_minutes;
           localStorage.setItem("otp_resend_minutes", resendMinutes);
 
           // Navigate to phone verification
@@ -1494,7 +1508,11 @@ function SignUpIndividualContent() {
     try {
       const result = await dispatch(sendEmailVerificationPasscode(email));
       if (sendEmailVerificationPasscode.fulfilled.match(result)) {
-        toast.success("Verification code sent to your email!");
+        toast.success(result.payload?.message || "Verification code sent to your email!");
+
+        // Extract resend_minutes from response and start countdown
+        const resendMinutes = result.payload?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
       } else {
         toast.error(result.payload || "Failed to send verification code");
       }
@@ -1537,8 +1555,54 @@ function SignUpIndividualContent() {
     }
   };
 
-  const handleResendCode = () => {
-    handleSendVerificationCode();
+  const handleResendCode = async () => {
+    if (resendCountdown > 0 || isResending) return;
+
+    const email = formik.values.email;
+    if (!email || formik.errors.email) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    const partnerIdStr = localStorage.getItem("whitelabelledpartnerid");
+    const partnerId = partnerIdStr ? parseInt(partnerIdStr, 10) : null;
+
+    const payload = {
+      request_user_email: email,
+      request_user_type: "customer",
+      partner_id: partnerId,
+    };
+
+    try {
+      setIsResending(true);
+      const token = localStorage.getItem("bearertoken");
+
+      const response = await axios.post(
+        `${API_URL}/resend-passcode-registration`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (response.data?.status === "success" || response.status === 200) {
+        toast.success(response.data?.message || "Passcode resent successfully!");
+        const resendMinutes = response.data?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
+      } else {
+        toast.error(response.data?.message || "Failed to resend passcode");
+      }
+    } catch (error) {
+      console.error("Resend passcode error:", error);
+      toast.error(
+        error.response?.data?.message || "An error occurred while resending the code."
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
 
   // Phone Verification Handlers
@@ -2197,44 +2261,61 @@ function SignUpIndividualContent() {
                           name="email"
                           type="email"
                           placeholder="your.email@example.com"
-                          onChange={formik.handleChange}
+                          onChange={(e) => {
+                            formik.handleChange(e);
+                            if (isEmailVerified) {
+                              dispatch(resetEmailVerification());
+                            }
+                          }}
                           onBlur={formik.handleBlur}
                           value={formik.values.email}
-                          // disabled={isEmailVerified}
+                          disabled={false}
                           className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
-            ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
-            ${formik.touched.email && formik.errors.email && !isEmailVerified
+          ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
+          ${formik.touched.email && formik.errors.email && !isEmailVerified
                               ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                               : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                             } shadow-sm`}
                         />
                       </div>
 
-                      {/* Verify Button - Only show when not verified */}
+                      {/* Verify / Resend Button */}
                       {!isEmailVerified && (
                         <button
                           type="button"
-                          onClick={handleSendVerificationCode}
-                          disabled={isSendingCode || !formik.values.email || formik.errors.email}
-                          className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                          onClick={showVerificationInput ? handleResendCode : handleSendVerificationCode}
+                          disabled={
+                            isSendingCode ||
+                            isResending ||
+                            !formik.values.email ||
+                            Boolean(formik.errors.email) ||
+                            (showVerificationInput && resendCountdown > 0)
+                          }
+                          className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap min-w-[95px]"
                         >
-                          {isSendingCode ? (
+                          {isSendingCode || isResending ? (
                             <div className="flex items-center gap-2">
                               <RingLoader size={16} color="#ffffff" />
                               <span>Sending...</span>
                             </div>
+                          ) : showVerificationInput ? (
+                            resendCountdown > 0 ? `Resend (${resendCountdown}s)` : "Resend"
                           ) : (
-                            'Verify'
+                            "Verify"
                           )}
                         </button>
                       )}
 
-                      {/* Verified Badge - Show when verified instead of button */}
+                      {/* Verified Badge */}
                       {isEmailVerified && (
-                        <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => dispatch(resetEmailVerification())}
+                          className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap hover:bg-green-200"
+                        >
                           <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                           <span className="font-medium">Verified</span>
-                        </div>
+                        </button>
                       )}
                     </div>
 
@@ -2283,15 +2364,19 @@ function SignUpIndividualContent() {
                         </button>
                       </div>
 
-                      {/* Resend link */}
+                      {/* Resend link with countdown */}
                       <div className="mt-3 text-center">
                         <button
                           type="button"
                           onClick={handleResendCode}
-                          disabled={isSendingCode}
+                          disabled={isResending || resendCountdown > 0}
                           className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
+                          {isResending
+                            ? "Sending..."
+                            : resendCountdown > 0
+                              ? `Didn't receive code? Resend in ${resendCountdown}s`
+                              : "Didn't receive code? Resend"}
                         </button>
                       </div>
 
@@ -3130,8 +3215,8 @@ function SignUpIndividualContent() {
                           </button>
                         </div> */}
 
-                        {/* Resend link */}
-                        {/* <div className="mt-3 text-center">
+                    {/* Resend link */}
+                    {/* <div className="mt-3 text-center">
                           <button
                             type="button"
                             onClick={handleResendPhoneCode}
@@ -3142,16 +3227,16 @@ function SignUpIndividualContent() {
                           </button>
                         </div> */}
 
-                        {/* Success message */}
-                        {/* {phoneVerification?.success && !isPhoneVerified && (
+                    {/* Success message */}
+                    {/* {phoneVerification?.success && !isPhoneVerified && (
                           <p className="text-green-600 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
                             {phoneVerification.success}
                           </p>
                         )} */}
 
-                        {/* Error message */}
-                        {/* {phoneVerification?.error && (
+                    {/* Error message */}
+                    {/* {phoneVerification?.error && (
                           <p className="text-red-500 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faExclamationCircle} className="text-red-500" />
                             {typeof phoneVerification.error === 'string'
@@ -3159,8 +3244,8 @@ function SignUpIndividualContent() {
                               : phoneVerification.error?.message || 'Verification failed'}
                           </p>
                         )} */}
-                      </div>
-                    {/* )} */}
+                  </div>
+                  {/* )} */}
                   {/* </div> */}
                 </div>
 

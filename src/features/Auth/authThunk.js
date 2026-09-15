@@ -939,6 +939,39 @@ export const resendOtpLogin = createAsyncThunk(
   }
 );
 
+// ===================== RESEND PASSCODE LOGIN =====================
+export const resendPasscodeLogin = createAsyncThunk(
+  "auth/resendPasscodeLogin",
+  async ({ login_request_user_id, login_request_user_type }, { rejectWithValue }) => {
+    try {
+      const token = await getBearerToken();
+
+      const payload = {
+        login_request_user_id,
+        login_request_user_type,
+      };
+
+      const response = await api.post("/resend-passcode-login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data?.status === "success") {
+        return response.data;
+      }
+
+      return rejectWithValue(response.data?.message || "Failed to resend passcode");
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(
+        error.response?.data?.message || errorMessage || "Failed to resend passcode"
+      );
+    }
+  }
+);
+
 // ===================== RESEND REGISTRATION OTP =====================
 export const resendRegistrationOtp = createAsyncThunk(
   "auth/resendRegistrationOtp",

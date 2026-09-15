@@ -67,6 +67,7 @@ import BusinessInformationEdit from "../src/page/Profile/BusinessInformationEdit
 import ResponsiblePersonEdit from "../src/page/Profile/ResponsiblePersonEdit/ResponsiblePersonEdit";
 import EditController from "../src/page/Profile/EditController/EditController";
 import EditOwner from "../src/page/Profile/EditOwner/EditOwner";
+import RequestToPay from "../src/page/RequestToPay/RequestToPay";
 
 const ProtectedLayout = () => {
   return (
@@ -311,6 +312,10 @@ const router = createBrowserRouter([
       {
         path: "request-remit/:customerId",
         element: <RequestRemit />,
+      },
+      {
+        path: "request-to-pay/:customerId",
+        element: <RequestToPay />,
       },
     ],
   },

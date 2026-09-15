@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { IoIosArrowForward } from "react-icons/io";
-import { Repeat, Download, Headphones } from "lucide-react";
+import { Repeat, Download, Headphones, HandCoins } from "lucide-react";
 import depositImg from "../../../assets/images/icon/Deposit-Img.png";
 import convertImg from "../../../assets/images/icon/Convert-Img.png";
 import remitImg from "../../../assets/images/icon/Remit-Img.png";
@@ -73,6 +73,8 @@ function NavigateSectionContent({
   const hasFetchedModules = useSelector(selectHasFetchedModules);
 
   const [showAddAccountPopup, setShowAddAccountPopup] = useState(false);
+
+  const isRemittanceOnlyCustomer = localStorage.getItem("isRemittanceOnlyCustomer");
 
   // Local state
   const [isFetching, setIsFetching] = useState(false);
@@ -294,6 +296,20 @@ function NavigateSectionContent({
     }
   };
 
+  const handleRequestToPayClick = () => {
+    try {
+      if (customerStatus === "Deactivated") {
+        showPopup(
+          "Your account is deactivated. You cannot request a payment.",
+        );
+        return;
+      }
+      navigate(`/request-to-pay/${customerId}`);
+    } catch (error) {
+      setLocalError("Failed to navigate to request to pay");
+    }
+  };
+
   const handleLinkBankClick = () => {
     try {
       if (customerStatus === "Deactivated") {
@@ -478,6 +494,16 @@ function NavigateSectionContent({
         (module) => module.module_name === "Remittance",
       ),
       description: "Send money globally",
+    },
+    {
+      id: "request-to-pay",
+      label: "Request to Pay",
+      icon: <HandCoins className="w-5 h-5 text-orange-600" />,
+      iconColor: "text-orange-600",
+      bgColor: "bg-orange-50",
+      onClick: handleRequestToPayClick,
+      visible: isRemittanceOnlyCustomer === "N",
+      description: "Request a payment from someone",
     },
     {
       id: "request-remit",
