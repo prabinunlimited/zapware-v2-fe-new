@@ -20,6 +20,8 @@ import {
   setConfirmPasswordError,
 } from "../slices/forgotPasswordSlice";
 
+import { openModal, closeModal } from "../../Auth/slices/uiSlice";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 export {
@@ -72,6 +74,8 @@ export const requestPasscode = (username, accountType) => async (dispatch) => {
     return;
   }
 
+  const partnerId = localStorage.getItem("whitelabelledpartnerid");
+
   dispatch(setIsLoading(true));
   dispatch(clearError());
 
@@ -82,7 +86,7 @@ export const requestPasscode = (username, accountType) => async (dispatch) => {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({ username }),
+      body: JSON.stringify({ username, partner_id: partnerId, }),
     });
 
     const checkData = await checkResponse.json();
@@ -115,6 +119,7 @@ export const requestPasscode = (username, accountType) => async (dispatch) => {
 
     const requestPayload = {
       username: username,
+      partner_id: partnerId,
     };
 
     if (accountType) {
@@ -170,6 +175,8 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
     return;
   }
 
+  const partnerId = localStorage.getItem("whitelabelledpartnerid");
+
   dispatch(setIsLoading(true));
   dispatch(clearError());
 
@@ -180,6 +187,7 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
     const payload = {
       username: username,
       otp_passcode: code,
+      partner_id: partnerId,
     };
 
     if (accountType) {
@@ -221,8 +229,8 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
       }
     } else {
       const rawError = data?.message || data?.error || "Invalid verification code. Please try again.";
-      const errorMessage = typeof rawError === "string" 
-        ? rawError 
+      const errorMessage = typeof rawError === "string"
+        ? rawError
         : (typeof rawError === "object" ? Object.values(rawError).flat().join(". ") : String(rawError));
 
       const lowerMsg = errorMessage.toLowerCase();
@@ -248,95 +256,175 @@ export const validatePasscode = (username, passcode, accountType) => async (disp
 
 export const resetPassword =
   (username, newPassword, confirmPassword, bearertoken, navigate, userUuid) =>
-  async (dispatch, getState) => {
-    if (!newPassword || newPassword.length < 12) {
-      dispatch(setNewPasswordError("Password must be at least 12 characters."));
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      dispatch(setConfirmPasswordError("Passwords do not match."));
-      return;
-    }
-
-    const hasUpperCase = /[A-Z]/.test(newPassword);
-    const hasLowerCase = /[a-z]/.test(newPassword);
-    const hasNumbers = /\d/.test(newPassword);
-    const hasSpecialChar = /[!@#$%^&*]/.test(newPassword);
-
-    if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
-      dispatch(
-        setNewPasswordError(
-          "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character."
-        )
-      );
-      return;
-    }
-
-    dispatch(setNewPasswordError(null));
-    dispatch(setConfirmPasswordError(null));
-
-    const token = bearertoken || getBearerToken();
-    if (!token) {
-      dispatch(setError("Authentication required. Please login again."));
-      return;
-    }
-
-    let finalUserUuid = userUuid;
-    if (!finalUserUuid) {
-      const state = getState();
-      finalUserUuid =
-        state.forgotPassword?.apiResponse?.user_uuid ||
-        localStorage.getItem("resetUserUuid");
-    }
-
-    if (!finalUserUuid) {
-      dispatch(
-        setError("User information not found. Please restart the password reset process.")
-      );
-      return;
-    }
-
-    dispatch(setIsLoading(true));
-    dispatch(clearError());
-
-    try {
-      const payload = {
-        user_uuid: finalUserUuid,
-        password: newPassword,
-        confirmPassword: confirmPassword,
-      };
-
-      const response = await fetch(`${API_URL}/reset-password-username`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        dispatch(setSuccessMessage(data.message || "Password reset successfully!"));
-        localStorage.removeItem("resetUserUuid");
-        setTimeout(() => {
-          dispatch(resetForgotPassword());
-          navigate("/");
-        }, 2000);
-      } else {
-        const rawError = data.message || data.error || data.errors || "Failed to reset password.";
-        const errorMessage = formatErrorMessage(rawError, "Failed to reset password.");
-        dispatch(setError(errorMessage));
+    async (dispatch, getState) => {
+      if (!newPassword || newPassword.length < 12) {
+        const msg = "Password must be at least 12 characters.";
+        dispatch(setNewPasswordError(msg));
+        dispatch(
+          openModal({
+            title: "Validation Error",
+            message: msg,
+            type: "error",
+            modalProps: { showCloseButton: true },
+          })
+        );
+        return;
       }
-    } catch (err) {
-      console.error("Error in resetPassword:", err);
-      dispatch(setError("Network error. Please try again."));
-    } finally {
-      dispatch(setIsLoading(false));
-    }
-  };
+
+      if (newPassword !== confirmPassword) {
+        const msg = "Passwords do not match.";
+        dispatch(setConfirmPasswordError(msg));
+        dispatch(
+          openModal({
+            title: "Validation Error",
+            message: msg,
+            type: "error",
+            modalProps: { showCloseButton: true },
+          })
+        );
+        return;
+      }
+
+      const hasUpperCase = /[A-Z]/.test(newPassword);
+      const hasLowerCase = /[a-z]/.test(newPassword);
+      const hasNumbers = /\d/.test(newPassword);
+      const hasSpecialChar = /[!@#$%^&*]/.test(newPassword);
+
+      if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+        const msg =
+          "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.";
+        dispatch(setNewPasswordError(msg));
+        dispatch(
+          openModal({
+            title: "Validation Error",
+            message: msg,
+            type: "error",
+            modalProps: { showCloseButton: true },
+          })
+        );
+        return;
+      }
+
+      dispatch(setNewPasswordError(null));
+      dispatch(setConfirmPasswordError(null));
+
+      const token = bearertoken || getBearerToken();
+      if (!token) {
+        const msg = "Authentication required. Please login again.";
+        dispatch(setError(msg));
+        dispatch(
+          openModal({
+            title: "Authentication Error",
+            message: msg,
+            type: "error",
+            modalProps: { showCloseButton: true },
+          })
+        );
+        return;
+      }
+
+      let finalUserUuid = userUuid;
+      if (!finalUserUuid) {
+        const state = getState();
+        finalUserUuid =
+          state.forgotPassword?.apiResponse?.user_uuid ||
+          localStorage.getItem("resetUserUuid");
+      }
+
+      if (!finalUserUuid) {
+        const msg = "User information not found. Please restart the password reset process.";
+        dispatch(setError(msg));
+        dispatch(
+          openModal({
+            title: "Error",
+            message: msg,
+            type: "error",
+            modalProps: { showCloseButton: true },
+          })
+        );
+        return;
+      }
+
+      dispatch(setIsLoading(true));
+      dispatch(clearError());
+
+      try {
+        const payload = {
+          user_uuid: finalUserUuid,
+          password: newPassword,
+          confirmPassword: confirmPassword,
+        };
+
+        const response = await fetch(`${API_URL}/reset-password-username`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.removeItem("resetUserUuid");
+
+          // Success Modal with OK button handling redirect on close
+          dispatch(
+            openModal({
+              title: "Password Reset Successful",
+              message: "Your password has been reset successfully. Please log in with your new password.",
+              type: "success",
+              modalProps: {
+                showCloseButton: false,
+                actions: [
+                  {
+                    label: "Go to Login",
+                    primary: true,
+                  },
+                ],
+              },
+              disableBackdropClick: true,
+              disableEscapeKey: true,
+            })
+          );
+        } else {
+          const rawError = data.message || data.error || data.errors || "Failed to reset password.";
+          const errorMessage = formatErrorMessage(rawError, "Failed to reset password.");
+          dispatch(setError(errorMessage));
+
+          //  Error Modal on API failure
+          dispatch(
+            openModal({
+              title: "Password Reset Failed",
+              message: errorMessage,
+              type: "error",
+              modalProps: {
+                showCloseButton: true,
+              },
+            })
+          );
+        }
+      } catch (err) {
+        console.error("Error in resetPassword:", err);
+        const networkMsg = "Network error. Please try again.";
+        dispatch(setError(networkMsg));
+
+        // ❌ Error Modal on network exception
+        dispatch(
+          openModal({
+            title: "Network Error",
+            message: networkMsg,
+            type: "error",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+      } finally {
+        dispatch(setIsLoading(false));
+      }
+    };
 
 export const handlePasscodeChange = (index, value) => (dispatch) => {
   // Allow only digits
