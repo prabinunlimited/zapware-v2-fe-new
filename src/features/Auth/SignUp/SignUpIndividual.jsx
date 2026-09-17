@@ -308,7 +308,10 @@ const createValidationSchema = (shouldShowPurposeOfAccount) => {
 
     mobile_number: Yup.string()
       .required("Phone number is required")
-      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
+      .matches(/^[1-9]/, "Phone number cannot start with 0")
+      .matches(/^\d+$/, "Phone number must contain only digits")
+      .min(5, "Phone number must be at least 5 digits")
+      .max(15, "Phone number cannot exceed 15 digits"),
 
     mobilenumber_countrycode: Yup.string().required("Country code is required"),
 
@@ -1414,7 +1417,7 @@ function SignUpIndividualContent() {
 
   // Phone number handler - NO DASHES
   const handlePhoneChange = (e) => {
-    const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+    const rawValue = e.target.value.replace(/\D/g, "").slice(0, 15);
     formik.setFieldValue("mobile_number", rawValue);
   };
 
@@ -2173,8 +2176,8 @@ function SignUpIndividualContent() {
             </div>
 
             {/* Form */}
-           {/* Form */}
-           <form
+            {/* Form */}
+            <form
               onSubmit={formik.handleSubmit}
               className="space-y-6"
               noValidate
@@ -2322,8 +2325,8 @@ function SignUpIndividualContent() {
                       ) : null}
                     </div>
                   ))}
-        {/* Unified Email & OTP Verification Container */}
-        <div ref={emailVerificationRef} className="relative rounded-xl p-1 transition-all duration-300">
+                  {/* Unified Email & OTP Verification Container */}
+                  <div ref={emailVerificationRef} className="relative rounded-xl p-1 transition-all duration-300">
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2.5">
                       Email Address *
                     </label>
@@ -3187,7 +3190,7 @@ function SignUpIndividualContent() {
                               id="mobile_number"
                               name="mobile_number"
                               onChange={(e) => {
-                                const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+                                const rawValue = e.target.value.replace(/\D/g, "").slice(0, 15);
                                 formik.setFieldValue("mobile_number", rawValue);
                                 // Reset phone verification when number changes
                                 // if (isPhoneVerified) {
@@ -3210,7 +3213,7 @@ function SignUpIndividualContent() {
                                   : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                                 } shadow-sm`}
                               placeholder="9813017273"
-                              maxLength={10}
+                              maxLength={15}
                             />
                           </div>
 
@@ -3320,6 +3323,12 @@ function SignUpIndividualContent() {
                   </div>
                   {/* )} */}
                   {/* </div> */}
+
+                  {/* Note below the phone number section */}
+                  <p className="text-xs text-amber-600 mt-2 flex items-center font-medium">
+                    <FontAwesomeIcon icon={faExclamationCircle} className="mr-1.5 text-amber-500" />
+                    Please double-check your phone number before proceeding.
+                  </p>
                 </div>
 
                 <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">
