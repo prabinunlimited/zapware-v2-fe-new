@@ -491,6 +491,49 @@ function SignUpIndividualContent() {
   const countryCodeRef = useRef("");
   const formTopRef = useRef(null);
 
+  const emailVerificationRef = useRef(null);
+
+  const checkEmailVerifiedOrRedirect = () => {
+    if (!isEmailVerified) {
+      // Prevents multiple toasts from firing if one is already showing
+      if (!toast.isActive("email-verify-warning")) {
+        toast.error("Please verify your email address before proceeding to other fields!", {
+          toastId: "email-verify-warning",
+          autoClose: 5000,
+        });
+      }
+
+      if (emailVerificationRef.current) {
+        emailVerificationRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        emailVerificationRef.current.classList.add(
+          "ring-4",
+          "ring-red-500",
+          "bg-red-50/70",
+          "transition-all",
+          "duration-500"
+        );
+
+        setTimeout(() => {
+          emailVerificationRef.current?.classList.remove(
+            "ring-4",
+            "ring-red-500",
+            "bg-red-50/70"
+          );
+        }, 4500);
+
+        const targetElement = emailVerificationRef.current.querySelector(
+          'button, input[placeholder*="code"], input[type="email"]'
+        );
+        if (targetElement) {
+          targetElement.focus();
+        }
+      }
+      return false;
+    }
+    return true;
+  };
+
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
   const selectedCountry = useSelector(selectSelectedCountry);
@@ -2077,6 +2120,11 @@ function SignUpIndividualContent() {
                       key={idx}
                       type="button"
                       onClick={() => {
+                        // Block jumping to contact, ID, security, terms tabs if unverified
+                        if (idx > 0 && !checkEmailVerifiedOrRedirect()) {
+                          return;
+                        }
+
                         // Only allow navigation if previous sections are valid
                         let canNavigate = true;
                         for (let i = 0; i < idx; i++) {
@@ -2123,11 +2171,36 @@ function SignUpIndividualContent() {
                 })}
               </div>
             </div>
+
             {/* Form */}
-            <form
+           {/* Form */}
+           <form
               onSubmit={formik.handleSubmit}
               className="space-y-6"
               noValidate
+              onFocusCapture={(e) => {
+                if (isEmailVerified) return;
+
+                const allowedInitialFields = [
+                  "first_name",
+                  "middle_name",
+                  "last_name",
+                  "dob",
+                  "email"
+                ];
+
+                const isTargetAllowed =
+                  allowedInitialFields.includes(e.target.id) ||
+                  allowedInitialFields.includes(e.target.name) ||
+                  emailVerificationRef.current?.contains(e.target);
+
+                if (!isTargetAllowed) {
+                  e.preventDefault();
+                  e.stopPropagation(); // Stops event bubbling to parent containers
+                  e.target.blur();
+                  checkEmailVerifiedOrRedirect();
+                }
+              }}
             >
               {/* Add verification banners here - after form opening tag */}
               {/* {registrationDataLoaded && (
@@ -2249,12 +2322,12 @@ function SignUpIndividualContent() {
                       ) : null}
                     </div>
                   ))}
-                  {/* Email Field with Verification */}
-                  <div className="relative">
+        {/* Unified Email & OTP Verification Container */}
+        <div ref={emailVerificationRef} className="relative rounded-xl p-1 transition-all duration-300">
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2.5">
                       Email Address *
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <div className="flex-1 relative">
                         <input
                           id="email"
@@ -2291,7 +2364,7 @@ function SignUpIndividualContent() {
                             Boolean(formik.errors.email) ||
                             (showVerificationInput && resendCountdown > 0)
                           }
-                          className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap min-w-[95px]"
+                          className="w-full sm:w-auto px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap min-w-[95px] flex items-center justify-center"
                         >
                           {isSendingCode || isResending ? (
                             <div className="flex items-center gap-2">
@@ -2311,7 +2384,7 @@ function SignUpIndividualContent() {
                         <button
                           type="button"
                           onClick={() => dispatch(resetEmailVerification())}
-                          className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap hover:bg-green-200"
+                          className="w-full sm:w-auto px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap hover:bg-green-200"
                         >
                           <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                           <span className="font-medium">Verified</span>
@@ -2328,75 +2401,75 @@ function SignUpIndividualContent() {
                         {formik.errors.email}
                       </p>
                     )}
-                  </div>
 
-                  {/* Verification Code Input (shown after clicking Verify) */}
-                  {showVerificationInput && !isEmailVerified && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Enter Verification Code
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            value={emailVerification.verificationCode}
-                            onChange={handleVerificationCodeChange}
-                            placeholder="Enter 6-digit code"
-                            maxLength={6}
-                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
-                          />
+                    {/* Verification Code Input (Moved INSIDE this div) */}
+                    {showVerificationInput && !isEmailVerified && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enter Verification Code
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={emailVerification.verificationCode}
+                              onChange={handleVerificationCodeChange}
+                              placeholder="Enter 6-digit code"
+                              maxLength={6}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleVerifyEmailCode}
+                            disabled={isVerifying || !emailVerification.verificationCode || emailVerification.verificationCode.length !== 6}
+                            className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                          >
+                            {isVerifying ? (
+                              <div className="flex items-center gap-2">
+                                <RingLoader size={16} color="#ffffff" />
+                                <span>Verifying...</span>
+                              </div>
+                            ) : (
+                              'Submit'
+                            )}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleVerifyEmailCode}
-                          disabled={isVerifying || !emailVerification.verificationCode || emailVerification.verificationCode.length !== 6}
-                          className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
-                        >
-                          {isVerifying ? (
-                            <div className="flex items-center gap-2">
-                              <RingLoader size={16} color="#ffffff" />
-                              <span>Verifying...</span>
-                            </div>
-                          ) : (
-                            'Submit'
-                          )}
-                        </button>
+
+                        {/* Resend link with countdown */}
+                        <div className="mt-3 text-center">
+                          <button
+                            type="button"
+                            onClick={handleResendCode}
+                            disabled={isResending || resendCountdown > 0}
+                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isResending
+                              ? "Sending..."
+                              : resendCountdown > 0
+                                ? `Didn't receive code? Resend in ${resendCountdown}s`
+                                : "Didn't receive code? Resend"}
+                          </button>
+                        </div>
+
+                        {/* Error message */}
+                        {emailVerification.error && (
+                          <p className="text-red-500 text-xs mt-3 flex items-center">
+                            <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                            {emailVerification.error}
+                          </p>
+                        )}
+
+                        {/* Success message */}
+                        {emailVerification.success && !isEmailVerified && (
+                          <p className="text-green-600 text-xs mt-3 flex items-center">
+                            <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                            {emailVerification.success}
+                          </p>
+                        )}
                       </div>
-
-                      {/* Resend link with countdown */}
-                      <div className="mt-3 text-center">
-                        <button
-                          type="button"
-                          onClick={handleResendCode}
-                          disabled={isResending || resendCountdown > 0}
-                          className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isResending
-                            ? "Sending..."
-                            : resendCountdown > 0
-                              ? `Didn't receive code? Resend in ${resendCountdown}s`
-                              : "Didn't receive code? Resend"}
-                        </button>
-                      </div>
-
-                      {/* Error message */}
-                      {emailVerification.error && (
-                        <p className="text-red-500 text-xs mt-3 flex items-center">
-                          <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
-                          {emailVerification.error}
-                        </p>
-                      )}
-
-                      {/* Success message */}
-                      {emailVerification.success && !isEmailVerified && (
-                        <p className="text-green-600 text-xs mt-3 flex items-center">
-                          <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                          {emailVerification.success}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   <div>
                     <label
