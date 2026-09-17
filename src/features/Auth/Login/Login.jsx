@@ -134,6 +134,9 @@ const Login = () => {
   const [isSubmittingInstitution, setIsSubmittingInstitution] = useState(false);
   const pendingInstitutionPayloadRef = useRef(null);
   const [showDownloadManual, setShowDownloadManual] = useState(false);
+  const [hasAccount, setHasAccount] = useState(null);
+  const [popupCheckDone, setPopupCheckDone] = useState(false);
+
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -299,7 +302,11 @@ const Login = () => {
             }
           } catch (popupError) {
             console.error("Frontend popup fetch error:", popupError);
+          } finally {
+            setPopupCheckDone(true);
           }
+        } else {
+          setPopupCheckDone(true);
         }
       } catch (error) {
         console.error("Partner login error on mount:", error);
@@ -2393,90 +2400,16 @@ const Login = () => {
             </div>
           </form>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mt-4 flex justify-center"
-          >
-            <motion.button
-              whileHover={{
-                scale: 1.05,
-                boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.5), 0 0 0 2px rgba(245, 158, 11, 0.2)",
-              }}
-              whileTap={{ scale: 0.95 }}
+          <div className="mt-4 flex justify-center text-sm text-gray-600">
+            New here?{" "}
+            <button
+              type="button"
               onClick={handleNavigation}
-              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl 
-               bg-gradient-to-r from-amber-500 to-orange-600 
-               text-white font-semibold shadow-lg
-               transition-all duration-300 overflow-hidden group"
+              className="ml-1 text-blue-600 hover:underline font-medium"
             >
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-700 opacity-0 group-hover:opacity-100"
-                initial={{ x: "-100%" }}
-                whileHover={{
-                  x: "100%",
-                  transition: { duration: 0.6, ease: "easeInOut" },
-                }}
-              />
-
-              <div className="absolute inset-0 overflow-hidden">
-                {[...Array(3)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-1 h-1 bg-white rounded-full"
-                    initial={{
-                      x: "-20px",
-                      y: Math.random() * 40,
-                      opacity: 0,
-                      scale: 0,
-                    }}
-                    whileHover={{
-                      x: "calc(100% + 20px)",
-                      opacity: [0, 1, 0],
-                      scale: [0, 1, 0],
-                      transition: {
-                        duration: 0.6,
-                        delay: i * 0.1,
-                        times: [0, 0.5, 1],
-                      },
-                    }}
-                  />
-                ))}
-              </div>
-
-              <motion.div
-                className="absolute inset-0 rounded-xl border-2 border-white/30"
-                whileHover={{
-                  borderColor: "rgba(255, 255, 255, 0.5)",
-                  scale: 1.02,
-                  transition: {
-                    duration: 0.3,
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                    repeatDelay: 0.5,
-                  },
-                }}
-              />
-
-              <div className="relative z-10 flex items-center justify-center space-x-2">
-                <motion.div
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <UserPlus className="w-5 h-5" />
-                </motion.div>
-                <span className="text-sm font-medium">Sign Up</span>
-                <motion.div
-                  initial={{ x: -5, opacity: 0 }}
-                  whileHover={{ x: 0, opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <ArrowRight className="w-4 h-4" />
-                </motion.div>
-              </div>
-            </motion.button>
-          </motion.div>
+              Create an account
+            </button>
+          </div>
 
           {showDownloadManual && (
             <button
@@ -2525,6 +2458,32 @@ const Login = () => {
               alt="Announcement"
               className="block max-w-[90vw] max-h-[90vh] w-auto h-auto rounded-xl object-contain"
             />
+          </div>
+        </div>
+      )}
+
+      {/* ========== NEW / EXISTING USER CHOOSER MODAL ========== */}
+      {popupCheckDone && !showFrontendPopup && hasAccount === null && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-2xl flex flex-col items-center gap-6 text-center">
+            <h1 className="text-2xl font-bold">Welcome</h1>
+            <p className="text-gray-600">Do you already have an account?</p>
+            <div className="flex gap-4 w-full">
+              <button
+                type="button"
+                onClick={() => setHasAccount(true)}
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Yes, Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/selectaccounttype")}
+                className="flex-1 px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+              >
+                No, Sign Up
+              </button>
+            </div>
           </div>
         </div>
       )}
