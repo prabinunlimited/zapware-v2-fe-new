@@ -136,7 +136,10 @@ const Login = () => {
   const [showDownloadManual, setShowDownloadManual] = useState(false);
   const [hasAccount, setHasAccount] = useState(null);
   const [popupCheckDone, setPopupCheckDone] = useState(false);
-
+  const [showSsnModal, setShowSsnModal] = useState(false);
+  const [ssnCustomerUuid, setSsnCustomerUuid] = useState(null);
+  const [ssnUpdatedBy, setSsnUpdatedBy] = useState(null);
+  const [isSubmittingSsn, setIsSubmittingSsn] = useState(false);
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -1605,6 +1608,12 @@ const Login = () => {
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
+        if (!result.customerSsn) {
+          setSsnCustomerUuid(result.customerUuid);
+          setSsnUpdatedBy(result.customer_id);
+          setShowSsnModal(true);
+          return;
+        }
         dispatch(
           openModal({
             title: "KYC Verification Pending",
@@ -1617,7 +1626,6 @@ const Login = () => {
         );
         return;
       }
-
       // NEW: Case 1b - Non-Remittance Customer, KYC pending but no Plaid action required (Show message, NO redirect)
       if (result.isAccountPending) {
         dispatch(setShowPasscodeInput(false));
@@ -1862,10 +1870,17 @@ const Login = () => {
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
+        if (!result.customerSsn) {
+          setSsnCustomerUuid(result.customerUuid);
+          setSsnUpdatedBy(result.customer_id);
+          setShowSsnModal(true);
+          return;
+        }
+
         dispatch(
           openModal({
             title: "Account Application Pending",
-            message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
+            message: result.plaid_message,
             type: "warning",
             modalProps: {
               showCloseButton: true,
@@ -2051,6 +2066,77 @@ const Login = () => {
       }
     }
   };
+
+  const ssnValidationSchema = Yup.object({
+    ssn: Yup.string()
+      .required("SSN is required")
+      .matches(/^\d{3}-\d{2}-\d{4}$/, "Enter a valid SSN (XXX-XX-XXXX)"),
+  });
+
+  const ssnFormik = useFormik({
+    initialValues: { ssn: "" },
+    validationSchema: ssnValidationSchema,
+    enableReinitialize: true,
+    onSubmit: async (values, { resetForm }) => {
+      const cleaned = values.ssn.replace(/\D/g, "");
+      const formattedSsn = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(5)}`;
+
+      setIsSubmittingSsn(true);
+
+      try {
+        const token = localStorage.getItem("bearertoken");
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/customers/update-ssn`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            customer_id: ssnCustomerUuid,
+            ssn: formattedSsn,
+            update_source: "zap",
+            updated_user_type: "customer",
+            updated_by: ssnUpdatedBy,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const message =
+            typeof result.message === "string"
+              ? result.message
+              : Object.values(result.message || {}).flat().join(" ");
+          throw new Error(message || "Failed to update SSN");
+        }
+
+        setShowSsnModal(false);
+        resetForm();
+
+        dispatch(
+          openModal({
+            title: "SSN Updated",
+            message: result.message || "Your SSN has been submitted. Your account will be approved within 24 to 48 hours.",
+            type: "success",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+      } catch (error) {
+        dispatch(
+          openModal({
+            title: "Error",
+            message: error.message || "Failed to update SSN",
+            type: "error",
+          })
+        );
+      } finally {
+        setIsSubmittingSsn(false);
+      }
+    },
+  });
 
   const handleNavigation = () => {
     navigate("/selectaccounttype");
@@ -2433,6 +2519,71 @@ const Login = () => {
           )}
         </div>
       </div>
+
+      {/* ========== UPDATE SSN MODAL ========== */}
+      {showSsnModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button
+              onClick={() => setShowSsnModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              disabled={isSubmittingSsn}
+            >
+              <AiOutlineClose size={20} />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-3">
+              KYC Not Verified
+            </h2>
+            <p className="text-gray-600 mb-6 text-sm">
+              Please update your SSN to complete your account verification.
+            </p>
+
+            <form onSubmit={ssnFormik.handleSubmit}>
+              <div className="mb-2">
+                <input
+                  id="ssn"
+                  name="ssn"
+                  type="text"
+                  value={ssnFormik.values.ssn}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+                    let formatted = digits;
+                    if (digits.length > 5) {
+                      formatted = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+                    } else if (digits.length > 3) {
+                      formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                    }
+                    ssnFormik.setFieldValue("ssn", formatted);
+                  }}
+                  onBlur={ssnFormik.handleBlur}
+                  placeholder="XXX-XX-XXXX"
+                  maxLength={11}
+                  className="block px-4 py-3 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {ssnFormik.errors.ssn && ssnFormik.touched.ssn && (
+                  <p className="mt-1 text-xs text-red-600">{ssnFormik.errors.ssn}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingSsn}
+                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
+              >
+                {isSubmittingSsn ? (
+                  <>
+                    <RingLoader size={20} color="#ffffff" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  "Submit SSN"
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ========== MODAL COMPONENT ========== */}
       <Modal

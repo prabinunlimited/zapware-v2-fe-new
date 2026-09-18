@@ -395,6 +395,8 @@ export const verifyPasscode = createAsyncThunk(
             isRemittanceOnlyCustomer: "Y",
             plaid_message: responseData.plaid_message || "Your KYC Verification is in Pending state. Please contact support team on suds@xchangely.com or call at +1 (408) 242-9705",
             customer_id: responseData.customer_id,
+            customerUuid: responseData.customerUuid || null,
+            customerSsn: responseData.customerSsn || null,
             // ❌ NO token, NO requiresPlaidRedirect
           };
         }
