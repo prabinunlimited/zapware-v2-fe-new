@@ -591,7 +591,7 @@ function PhoneVerification() {
       transition={{ duration: 0.5 }}
       className="min-h-screen flex items-center justify-center bg-gradient-to-r from-gray-50 to-gray-100 p-4 sm:p-6"
     >
-      <ToastContainer position="top-right" autoClose={1000} />
+      <ToastContainer position="top-right" autoClose={6000} />
 
       {isRedirecting && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

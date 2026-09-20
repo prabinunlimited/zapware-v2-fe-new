@@ -397,6 +397,8 @@ export const verifyPasscode = createAsyncThunk(
             customer_id: responseData.customer_id,
             customerUuid: responseData.customerUuid || null,
             customerSsn: responseData.customerSsn || null,
+            plaid_kyc_required: responseData.plaid_kyc_required || null,
+            plaidUrl: responseData.plaid_url || null,
             // ❌ NO token, NO requiresPlaidRedirect
           };
         }
@@ -714,18 +716,23 @@ export const verifyOTP = createAsyncThunk(
 
         //  CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
         if (responseData.kyc_status === "0" &&
-          responseData.isRemittanceOnlyCustomer === "Y") {
+        responseData.isRemittanceOnlyCustomer === "Y") {
 
-          // Return ONLY the message, NO token, NO customer_id for authentication
-          return {
-            kyc_status: "0",
-            isRemittanceOnlyCustomer: "Y",
-            plaid_message: responseData.plaid_message,
-            showKycMessage: true,
-            requiresRedirect: false,
-            // ❌ DO NOT include token or customer_id here
-          };
-        }
+        // Return ONLY the message, NO token, NO customer_id for authentication
+        return {
+          kyc_status: "0",
+          isRemittanceOnlyCustomer: "Y",
+          plaid_message: responseData.plaid_message,
+          showKycMessage: true,
+          requiresRedirect: false,
+          customer_id: responseData.customer_id,
+          customerUuid: responseData.customerUuid || null,
+          customerSsn: responseData.customerSsn || null,
+          plaid_kyc_required: responseData.plaid_kyc_required || null,
+          plaidUrl: responseData.plaid_url || null,
+          // ❌ DO NOT include token here
+        };
+      }
 
         // CASE 1b: Non-Remittance Customer, KYC pending but no Plaid action required - just show message
         if (responseData.kyc_status === "0" &&
