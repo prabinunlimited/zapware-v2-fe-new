@@ -1608,6 +1608,40 @@ const Login = () => {
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
+        if (result.plaid_kyc_required === "Y") {
+          if (result.plaidUrl) {
+            dispatch(
+              openModal({
+                title: "Verification Required",
+                message: "Redirecting to KYC Verification. Please complete and login",
+                type: "info",
+                modalProps: {
+                  showSpinner: true,
+                  autoClose: true,
+                  autoCloseDelay: 2000,
+                },
+              })
+            );
+
+            setTimeout(() => {
+              dispatch(closeModal());
+              window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+            }, 2000);
+          } else {
+            dispatch(
+              openModal({
+                title: "Verification Error",
+                message: result.plaid_message || "Unable to complete KYC verification. Please contact support.",
+                type: "error",
+                modalProps: {
+                  showCloseButton: true,
+                },
+              })
+            );
+          }
+          return;
+        }
+
         if (!result.customerSsn) {
           setSsnCustomerUuid(result.customerUuid);
           setSsnUpdatedBy(result.customer_id);
@@ -1872,6 +1906,40 @@ const Login = () => {
         dispatch(setShowOtpInput(false));
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
+
+        if (result.plaid_kyc_required === "Y") {
+          if (result.plaidUrl) {
+            dispatch(
+              openModal({
+                title: "Verification Required",
+                message: "Redirecting to KYC Verification. Please complete and login",
+                type: "info",
+                modalProps: {
+                  showSpinner: true,
+                  autoClose: true,
+                  autoCloseDelay: 2000,
+                },
+              })
+            );
+
+            setTimeout(() => {
+              dispatch(closeModal());
+              window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+            }, 2000);
+          } else {
+            dispatch(
+              openModal({
+                title: "Verification Error",
+                message: result.plaid_message || "Unable to complete KYC verification. Please contact support.",
+                type: "error",
+                modalProps: {
+                  showCloseButton: true,
+                },
+              })
+            );
+          }
+          return;
+        }
 
         if (!result.customerSsn) {
           setSsnCustomerUuid(result.customerUuid);
