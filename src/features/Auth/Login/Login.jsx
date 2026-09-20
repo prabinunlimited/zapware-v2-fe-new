@@ -1651,22 +1651,25 @@ const Login = () => {
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
-
-        window.location.href = result.plaidUrl;
-
-        // Optional: Show notification
+        // 1. Show the message modal first
         dispatch(
           openModal({
             title: "Verification Required",
-            message: "Redirecting to verification page...",
+            message: "Redirecting to KYC Verification. Please complete and login",
             type: "info",
             modalProps: {
               showSpinner: true,
               autoClose: true,
-              autoCloseDelay: 3000,
+              autoCloseDelay: 2000,
             },
           })
         );
+
+        // 2. Open Plaid in a new tab after 2 seconds
+        setTimeout(() => {
+          dispatch(closeModal());
+          window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+        }, 2000);
         return;
       }
 
@@ -1915,26 +1918,25 @@ const Login = () => {
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
-        // Show redirecting message first
+        // 1. Show the message modal first
         dispatch(
           openModal({
-            title: "Redirecting",
-            message: "Redirecting to verification page...",
+            title: "Verification Required",
+            message: "Redirecting to KYC Verification.Please complete and login",
             type: "info",
             modalProps: {
               showSpinner: true,
               autoClose: true,
               autoCloseDelay: 2000,
             },
-            disableBackdropClick: true,
           })
         );
 
-        // Then redirect after 2 seconds
+        // 2. Open Plaid in a new tab after 2 seconds
         setTimeout(() => {
-          window.location.href = result.plaidUrl;
+          dispatch(closeModal());
+          window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
         }, 2000);
-
         return;
       }
 
