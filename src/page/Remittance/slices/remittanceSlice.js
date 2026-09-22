@@ -35,6 +35,14 @@ export const fetchManualAccountDetails = createAsyncThunk(
     try {
       const token = localStorage.getItem("bearertoken");
 
+      if (!token) {
+        return rejectWithValue("Authentication required");
+      }
+
+      if (!bankId) {
+        return rejectWithValue("Bank ID is required to fetch account details");
+      }
+
       const state = getState();
       const bankAccount = state.remittance.bankAccounts.find(
         (acc) =>
@@ -44,81 +52,29 @@ export const fetchManualAccountDetails = createAsyncThunk(
 
       const isRemittanceOnly = bankAccount?.is_remittance_only || false;
 
-      console.log("🔍 Fetching manual details:", {
+      console.log("🔍 Fetching manual account details from API:", {
         bankId,
         currencyCode,
         isRemittanceOnly,
-        bankAccount,
       });
 
-      if (currencyCode === "USD" || isRemittanceOnly) {
-        console.log("Using hardcoded/remittance-only manual account details");
+      const response = await axios.get(
+        `${API_URL}/manualaccount-detail/${bankId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
-        const hardcodedDetails = {
-          status: 200,
-          message: "Bank details fetched successfully",
-          account_name: isRemittanceOnly
-            ? "Remittance Service Account"
-            : "Unlimited Cloud LLC",
-          account_number: isRemittanceOnly
-            ? "REMITTANCE-ACCT-001"
-            : "518366536",
-          bank_name: isRemittanceOnly
-            ? "Remittance Processing Bank"
-            : "Chase Bank",
-          bank_address: isRemittanceOnly
-            ? "Remittance Processing Center"
-            : "2790 Park Ave., New York, NY 10017, USA",
-          routing_number: isRemittanceOnly ? "REMIT001" : "021000021",
-          swift_code: isRemittanceOnly ? "REMITTUS33" : "CHASUS33",
-          account_type: "Checking",
-          is_remittance_only: isRemittanceOnly,
-          beneficiary_address: {
-            street: "2790 Park Ave.",
-            postalCode: "10017",
-            city: "New York",
-            state: "NY",
-            zipCode: "10017",
-            country: "USA",
-          },
-        };
-
-        return hardcodedDetails;
-      } else {
-        const response = await axios.get(
-          `${API_URL}/manualaccount-detail/${bankId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        return {
-          ...response.data,
-          is_remittance_only: false,
-        };
-      }
-    } catch (error) {
-      if (currencyCode !== "USD") {
-        return rejectWithValue(error.response?.data || error.message);
-      }
-
-      console.warn("Error fetching manual details, using fallback");
-      const fallbackDetails = {
-        status: 200,
-        message: "Using fallback bank details",
-        account_name: "Unlimited Cloud LLC",
-        account_number: "518366536",
-        bank_name: "Chase Bank",
-        bank_address: "2790 Park Ave., New York, NY 10017, USA",
-        routing_number: "021000021",
-        swift_code: "CHASUS33",
-        account_type: "Checking",
-        is_remittance_only: false,
+      return {
+        ...response.data,
+        is_remittance_only: isRemittanceOnly,
       };
-      return fallbackDetails;
+    } catch (error) {
+      console.error("❌ Failed to fetch manual account details:", error);
+      return rejectWithValue(error.response?.data || error.message);
     }
   },
 );
-
 export const validatePromoCode = createAsyncThunk(
   "remittance/validatePromoCode",
   async ({ customerId, promocode, amount }, { rejectWithValue }) => {

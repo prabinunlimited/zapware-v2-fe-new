@@ -3151,9 +3151,9 @@ const ManualDepositSection = ({
   if (manualDetailsLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <div className="text-center py-8">
+        <div className="flex flex-col items-center justify-center py-8">
           <RingLoader color="#6366f1" size={40} />
-          <p className="mt-4 text-slate-600">Loading bank details...</p>
+          <p className="mt-4 text-slate-600 text-center">Loading bank details...</p>
         </div>
       </div>
     );
