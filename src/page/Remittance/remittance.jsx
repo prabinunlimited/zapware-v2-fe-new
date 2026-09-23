@@ -57,6 +57,8 @@ import {
   fetchExchangeRate,
   fetchBankAccounts,
   fetchPayoutCurrencies,
+  fetchRemittanceCurrencies,
+  fetchManualRemittanceAccountDetails,
   submitTransaction,
   fetchManualAccountDetails,
   setExchangeRateData,
@@ -65,6 +67,7 @@ import {
 } from "./slices/remittanceSlice";
 
 import { fetchAllStaticData } from "./slices/staticDataSlice";
+import { fetchUserProfile } from "../../components/Dashboard/Header/headerSlice"
 
 // Import beneficiary actions
 import {
@@ -106,6 +109,9 @@ const Remittance = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { customerId } = useParams();
+
+  const isRemittanceOnlyCustomer =
+    localStorage.getItem("isRemittanceOnlyCustomer") === "Y";
 
   // Select state from Redux store
   const {
@@ -233,6 +239,15 @@ const Remittance = () => {
     [],
   );
 
+  const availablePaymentOptions = useMemo(() => {
+    if (!isRemittanceOnlyCustomer) return paymentOptions;
+
+    const bankEnabled = formData.sendCurrency?.bank_enabled !== false;
+    return bankEnabled
+      ? paymentOptions
+      : paymentOptions.filter((option) => option.value !== "bank");
+  }, [paymentOptions, isRemittanceOnlyCustomer, formData.sendCurrency?.bank_enabled]);
+
   const purposeOptions = useMemo(
     () =>
       Array.isArray(purposes)
@@ -270,18 +285,26 @@ const Remittance = () => {
   );
 
   // Memoized currency options
-  const sendCurrencyOptions = useMemo(
-    () =>
-      (bankAccounts || []).map((account) => ({
-        value: account.currency_code,
-        label: account.currency_code,
-        fullLabel: `${account.currency_code} - ${account.bank_name || "Account"}`,
-        bank_id: account.id,
-        icon: account.icon,
-        balance: account.balance,
-      })),
-    [bankAccounts],
-  );
+  const sendCurrencyOptions = useMemo(() => {
+    if (isRemittanceOnlyCustomer) {
+      return (currencies?.remittanceCurrencies || []).map((currency) => ({
+        value: currency.currency_code,
+        label: currency.currency_code,
+        fullLabel: currency.currency_code,
+        currency_id: currency.currency_id,
+        bank_enabled: currency.bank_enabled,
+      }));
+    }
+
+    return (bankAccounts || []).map((account) => ({
+      value: account.currency_code,
+      label: account.currency_code,
+      fullLabel: `${account.currency_code} - ${account.bank_name || "Account"}`,
+      bank_id: account.id,
+      icon: account.icon,
+      balance: account.balance,
+    }));
+  }, [bankAccounts, currencies?.remittanceCurrencies, isRemittanceOnlyCustomer]);
 
   // FIXED: receiveCurrencyOptions - Only shows currencies from the API endpoint
   const receiveCurrencyOptions = useMemo(() => {
@@ -426,8 +449,8 @@ const Remittance = () => {
     setShowBankLinkReminder(false);
   }, []);
 
-  const totalToPay = parseFloat(formData.sendAmount || 0);
   const fee = parseFloat(exchangeRateData?.fee || exchangeRateData?.payoutCharge || 0);
+  const totalToPay = parseFloat(formData.sendAmount || 0) + fee;
 
   // ALL useEffects must be at top level
   useEffect(() => {
@@ -478,11 +501,21 @@ const Remittance = () => {
           console.log("🔍 Initializing with customerId:", customerId);
           console.log("🔍 partner_id from localStorage:", localStorage.getItem("partner_id"));
 
-          await Promise.all([
+          const initPromises = [
             dispatch(fetchBankAccounts(customerId)),
             dispatch(fetchPayoutCurrencies()),
             dispatch(fetchAllStaticData()),
-          ]);
+          ];
+
+          if (isRemittanceOnlyCustomer) {
+            const bearertoken = localStorage.getItem("bearertoken");
+            await dispatch(
+              fetchUserProfile({ customerId, bearertoken }),
+            ).unwrap();
+            initPromises.push(dispatch(fetchRemittanceCurrencies()));
+          }
+
+          await Promise.all(initPromises);
 
           setTimeout(() => {
             setIsInitializing(false);
@@ -711,37 +744,37 @@ const Remittance = () => {
     isInitializing,
   ]);
 
-  useEffect(() => {
-    if (!initialLoading && !loading) {
-      if (
-        formData.sendCurrency?.value &&
-        formData.receiveCurrency?.value &&
-        !exchangeRateData?.fxRate &&
-        !isRequestInProgress.current &&
-        !isTyping.current
-      ) {
-        const timer = setTimeout(() => {
-          const cacheKey = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value
-            }-${parseFloat(formData.sendAmount) || 5}`;
+  // useEffect(() => {
+  //   if (!initialLoading && !loading) {
+  //     if (
+  //       formData.sendCurrency?.value &&
+  //       formData.receiveCurrency?.value &&
+  //       !exchangeRateData?.fxRate &&
+  //       !isRequestInProgress.current &&
+  //       !isTyping.current
+  //     ) {
+  //       const timer = setTimeout(() => {
+  //         const cacheKey = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value
+  //           }-${parseFloat(formData.sendAmount) || 5}`;
 
-          if (exchangeRateCache.current[cacheKey]) {
-            delete exchangeRateCache.current[cacheKey];
-          }
+  //         if (exchangeRateCache.current[cacheKey]) {
+  //           delete exchangeRateCache.current[cacheKey];
+  //         }
 
-          fetchExchangeRateManual();
-        }, 500);
+  //         fetchExchangeRateManual();
+  //       }, 500);
 
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [
-    initialLoading,
-    loading,
-    formData.sendCurrency?.value,
-    formData.receiveCurrency?.value,
-    exchangeRateData?.fxRate,
-    formData.sendAmount,
-  ]);
+  //       return () => clearTimeout(timer);
+  //     }
+  //   }
+  // }, [
+  //   initialLoading,
+  //   loading,
+  //   formData.sendCurrency?.value,
+  //   formData.receiveCurrency?.value,
+  //   exchangeRateData?.fxRate,
+  //   formData.sendAmount,
+  // ]);
 
   useEffect(() => {
     if (
@@ -870,9 +903,13 @@ const Remittance = () => {
     let fetchTimer;
 
     const fetchDetails = async () => {
+      const hasIdentifier = isRemittanceOnlyCustomer
+        ? formData.sendCurrency?.currency_id
+        : formData.sendCurrency?.bank_id;
+
       if (
         formData.paymentMethod === "manual" &&
-        formData.sendCurrency?.bank_id &&
+        hasIdentifier &&
         formData.sendCurrency?.value
       ) {
         if (isMounted) {
@@ -881,14 +918,20 @@ const Remittance = () => {
         }
 
         try {
-          const result = await dispatch(
-            fetchManualAccountDetails({
-              bankId: formData.sendCurrency.bank_id,
-              currencyCode: formData.sendCurrency.value,
-              amount: formData.sendAmount || "5",
-              customerId: parseInt(customerId),
-            }),
-          ).unwrap();
+          const result = isRemittanceOnlyCustomer
+            ? await dispatch(
+              fetchManualRemittanceAccountDetails(
+                formData.sendCurrency.currency_id,
+              ),
+            ).unwrap()
+            : await dispatch(
+              fetchManualAccountDetails({
+                bankId: formData.sendCurrency.bank_id,
+                currencyCode: formData.sendCurrency.value,
+                amount: formData.sendAmount || "5",
+                customerId: parseInt(customerId),
+              }),
+            ).unwrap();
 
           if (isMounted) {
             if (
@@ -950,9 +993,11 @@ const Remittance = () => {
   }, [
     formData.paymentMethod,
     formData.sendCurrency?.bank_id,
+    formData.sendCurrency?.currency_id,
     formData.sendCurrency?.value,
     formData.sendAmount,
     customerId,
+    isRemittanceOnlyCustomer,
     dispatch,
   ]);
 
@@ -1248,6 +1293,10 @@ const Remittance = () => {
       setShowRecipientDetails(false);
       setAmountError(null); // Clear amount error when currency changes
 
+      if (isRemittanceOnlyCustomer && option?.bank_enabled === false) {
+        dispatch(setPaymentMethod("manual"));
+      }
+
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.startsWith(option?.value)) {
           delete exchangeRateCache.current[key];
@@ -1256,7 +1305,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     },
-    [dispatch],
+    [dispatch, isRemittanceOnlyCustomer],
   );
 
   const handleReceiveCurrencyChange = useCallback(
@@ -1352,10 +1401,12 @@ const Remittance = () => {
     (beneficiary) => {
       dispatch(setSelectedBeneficiary(beneficiary));
       if (beneficiary?.id) {
-        dispatch(fetchBeneficiaryBanks(beneficiary.id));
+        dispatch(
+          fetchBeneficiaryBanks({ customerId, beneficiaryId: beneficiary.id }),
+        );
       }
     },
-    [dispatch],
+    [dispatch, customerId],
   );
 
   const handleBankSelect = useCallback(
@@ -2065,12 +2116,17 @@ const Remittance = () => {
         handleBankSelect(fullBeneficiary.benef_banks[0]);
       } else {
         console.log("🔍 Fetching banks for new beneficiary");
-        dispatch(fetchBeneficiaryBanks(fullBeneficiary.id));
+        dispatch(
+          fetchBeneficiaryBanks({
+            customerId,
+            beneficiaryId: fullBeneficiary.id,
+          }),
+        );
       }
 
       setPendingNewBeneficiaryId(null);
     }
-  }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch]);
+  }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch, customerId]);
 
   if (initialLoading) {
     return (
@@ -2182,7 +2238,7 @@ const Remittance = () => {
             purposeOptions={purposeOptions}
             incomeSourceOptions={incomeSourceOptions}
             relationOptions={relationOptions}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             onPaymentMethodChange={handlePaymentMethodChange}
             onFieldChange={handleFieldChange}
             copyToClipboard={copyToClipboard}
@@ -2205,7 +2261,7 @@ const Remittance = () => {
             purposeOptions={purposeOptions}
             incomeSourceOptions={incomeSourceOptions}
             relationOptions={relationOptions}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             selectedCurrency={formData.sendCurrency?.value}
             silaBankAccounts={silaBankAccounts}
             hasSilaAccounts={hasSilaAccounts}
@@ -2470,7 +2526,7 @@ const Remittance = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {paymentOptions.map((option) => {
+                {availablePaymentOptions.map((option) => {
                   const isSelected = formData.paymentMethod === option.value;
                   return (
                     <motion.button
@@ -2554,10 +2610,9 @@ const Remittance = () => {
                     <span className="text-slate-600">Transfer fee</span>
                     <span className="font-semibold text-slate-900">
                       {formData.sendCurrency?.value}{" "}
-                      {parseFloat(exchangeRateData?.fee || 0).toLocaleString(
-                        undefined,
-                        { minimumFractionDigits: 2 }
-                      )}
+                      {fee.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-t border-slate-200">
@@ -2622,7 +2677,7 @@ const Remittance = () => {
         return (
           <Step2Details
             formData={formData}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             beneficiaryBanks={beneficiaryBanks}
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
