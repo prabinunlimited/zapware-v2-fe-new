@@ -104,7 +104,7 @@ const RequestToPay = () => {
         dueDate: "",
         reason: null,
         websiteUrl: "",
-        statementFile: null,
+        statementFile: "",
     });
 
     // Direct input typing state
@@ -114,6 +114,41 @@ const RequestToPay = () => {
     const [errors, setErrors] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
+
+    // Error modal state
+    const [errorModal, setErrorModal] = useState({
+        isOpen: false,
+        title: "",
+        message: "",
+        fieldErrors: [],
+    });
+
+    const closeErrorModal = () => {
+        setErrorModal({
+            isOpen: false,
+            title: "",
+            message: "",
+            fieldErrors: [],
+        });
+    };
+
+    const handleApiError = (data) => {
+        const message =
+            data?.message || "An error occurred while submitting your request.";
+        let fieldErrors = [];
+
+        // Flattens the "errors": { "field": ["error1", "error2"] } into a clean array
+        if (data?.errors && typeof data.errors === "object") {
+            fieldErrors = Object.values(data.errors).flat();
+        }
+
+        setErrorModal({
+            isOpen: true,
+        
+            message,
+            fieldErrors,
+        });
+    };
 
     // Dropdown states
     const [isCountryOpen, setIsCountryOpen] = useState(false);
@@ -246,10 +281,6 @@ const RequestToPay = () => {
             newErrors.reason = "Payment reason is required";
         }
 
-        if (!formData.statementFile) {
-            newErrors.statementFile = "Statement or invoice document is required";
-        }
-
         setErrors(newErrors);
         return newErrors;
     };
@@ -365,17 +396,10 @@ const RequestToPay = () => {
             }
         } catch (err) {
             console.error("Submission error:", err);
-            const serverMsg =
-                err.response?.data?.message ||
-                err.response?.data?.error ||
-                "Failed to submit payment request. Please try again.";
-            setErrors((prev) => ({
-                ...prev,
-                submit: serverMsg,
-            }));
-        } finally {
+            handleApiError(err.response?.data);
+          } finally {
             setIsSubmitting(false);
-        }
+          }
     };
 
     // Filter based directly on what the user types in the input
@@ -450,13 +474,6 @@ const RequestToPay = () => {
                         </div>
                     ) : (
                         <form onSubmit={handleSubmit} className="p-4 sm:p-8 space-y-4 sm:space-y-6">
-                            {errors.submit && (
-                                <div className="p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm flex items-center gap-2">
-                                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
-                                    <span>{errors.submit}</span>
-                                </div>
-                            )}
-
                             {/* 1. Client Type */}
                             <div id="field-clientType">
                                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-2">
@@ -1015,7 +1032,7 @@ const RequestToPay = () => {
                             {/* 7. Statement Document Upload */}
                             <div id="field-statementFile">
                                 <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">
-                                    Statement / Invoice Document <span className="text-red-500">*</span>
+                                    Statement / Invoice Document
                                 </label>
 
                                 {!formData.statementFile ? (
@@ -1089,6 +1106,45 @@ const RequestToPay = () => {
                     )}
                 </div>
             </main>
+            {/* Error Popup Modal */}
+            {errorModal.isOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-gray-100 overflow-hidden">
+                        <div className="p-6 text-center">
+                            <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                                <AlertCircle className="w-6 h-6 text-red-600" />
+                            </div>
+
+                            <h3 className="text-lg font-bold text-gray-900 mb-1">
+                                {errorModal.title}
+                            </h3>
+
+                            <p className="text-sm text-gray-600 mb-4">
+                                {errorModal.message}
+                            </p>
+
+                            {/* Backend field-specific errors list */}
+                            {errorModal.fieldErrors.length > 0 && (
+                                <div className="text-left bg-red-50/70 border border-red-100 rounded-xl p-3.5 mb-5 space-y-1.5 max-h-48 overflow-y-auto">
+                                    {errorModal.fieldErrors.map((errText, index) => (
+                                        <li key={index} className="text-xs text-red-700 list-disc ml-4">
+                                            {errText}
+                                        </li>
+                                    ))}
+                                </div>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={closeErrorModal}
+                                className="w-full py-2.5 px-4 bg-gray-900 hover:bg-gray-800 text-white rounded-xl text-sm font-semibold transition cursor-pointer"
+                            >
+                                Okay, got it
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
