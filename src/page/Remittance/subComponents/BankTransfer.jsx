@@ -555,9 +555,8 @@ const BankTransfer = ({
     try {
       console.log("📋 Fetching banks for beneficiary ID:", selectedOption.id);
       const result = await dispatch(
-        fetchBeneficiaryBanks(selectedOption.id)
-      ).unwrap();
-
+        fetchBeneficiaryBanks({ customerId, beneficiaryId: selectedOption.id })
+      ).unwrap()
       console.log("📋 Banks fetched successfully:", result);
 
       // Find matching options from beneficiary data

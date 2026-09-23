@@ -35,6 +35,14 @@ export const fetchManualAccountDetails = createAsyncThunk(
     try {
       const token = localStorage.getItem("bearertoken");
 
+      if (!token) {
+        return rejectWithValue("Authentication required");
+      }
+
+      if (!bankId) {
+        return rejectWithValue("Bank ID is required to fetch account details");
+      }
+
       const state = getState();
       const bankAccount = state.remittance.bankAccounts.find(
         (acc) =>
@@ -44,81 +52,29 @@ export const fetchManualAccountDetails = createAsyncThunk(
 
       const isRemittanceOnly = bankAccount?.is_remittance_only || false;
 
-      console.log("🔍 Fetching manual details:", {
+      console.log("🔍 Fetching manual account details from API:", {
         bankId,
         currencyCode,
         isRemittanceOnly,
-        bankAccount,
       });
 
-      if (currencyCode === "USD" || isRemittanceOnly) {
-        console.log("Using hardcoded/remittance-only manual account details");
+      const response = await axios.get(
+        `${API_URL}/manualaccount-detail/${bankId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
 
-        const hardcodedDetails = {
-          status: 200,
-          message: "Bank details fetched successfully",
-          account_name: isRemittanceOnly
-            ? "Remittance Service Account"
-            : "Unlimited Cloud LLC",
-          account_number: isRemittanceOnly
-            ? "REMITTANCE-ACCT-001"
-            : "518366536",
-          bank_name: isRemittanceOnly
-            ? "Remittance Processing Bank"
-            : "Chase Bank",
-          bank_address: isRemittanceOnly
-            ? "Remittance Processing Center"
-            : "2790 Park Ave., New York, NY 10017, USA",
-          routing_number: isRemittanceOnly ? "REMIT001" : "021000021",
-          swift_code: isRemittanceOnly ? "REMITTUS33" : "CHASUS33",
-          account_type: "Checking",
-          is_remittance_only: isRemittanceOnly,
-          beneficiary_address: {
-            street: "2790 Park Ave.",
-            postalCode: "10017",
-            city: "New York",
-            state: "NY",
-            zipCode: "10017",
-            country: "USA",
-          },
-        };
-
-        return hardcodedDetails;
-      } else {
-        const response = await axios.get(
-          `${API_URL}/manualaccount-detail/${bankId}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          },
-        );
-        return {
-          ...response.data,
-          is_remittance_only: false,
-        };
-      }
-    } catch (error) {
-      if (currencyCode !== "USD") {
-        return rejectWithValue(error.response?.data || error.message);
-      }
-
-      console.warn("Error fetching manual details, using fallback");
-      const fallbackDetails = {
-        status: 200,
-        message: "Using fallback bank details",
-        account_name: "Unlimited Cloud LLC",
-        account_number: "518366536",
-        bank_name: "Chase Bank",
-        bank_address: "2790 Park Ave., New York, NY 10017, USA",
-        routing_number: "021000021",
-        swift_code: "CHASUS33",
-        account_type: "Checking",
-        is_remittance_only: false,
+      return {
+        ...response.data,
+        is_remittance_only: isRemittanceOnly,
       };
-      return fallbackDetails;
+    } catch (error) {
+      console.error("❌ Failed to fetch manual account details:", error);
+      return rejectWithValue(error.response?.data || error.message);
     }
   },
 );
-
 export const validatePromoCode = createAsyncThunk(
   "remittance/validatePromoCode",
   async ({ customerId, promocode, amount }, { rejectWithValue }) => {
@@ -397,32 +353,32 @@ export const fetchPayoutCurrencies = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("bearertoken");
-      
+
       // Try multiple possible keys for the partner ID
-      const partnerId = localStorage.getItem("partner_id") || 
-                       localStorage.getItem("whitelabelledpartnerid") ||
-                       localStorage.getItem("whitelabelled_partner_id");
-      
+      const partnerId = localStorage.getItem("partner_id") ||
+        localStorage.getItem("whitelabelledpartnerid") ||
+        localStorage.getItem("whitelabelled_partner_id");
+
       const isWhitelabelled = localStorage.getItem("iswhitelabelledpartner") === "Y" ||
-                              localStorage.getItem("whitelabelled_customer_partnername") !== null;
-      
+        localStorage.getItem("whitelabelled_customer_partnername") !== null;
+
       console.log("🔍 FetchPayoutCurrencies called");
       console.log("📦 partner_id from localStorage:", partnerId);
       console.log("🏷️ isWhitelabelled:", isWhitelabelled);
       console.log("🔑 Token exists:", !!token);
-      
+
       if (!token) {
         console.error("❌ No auth token found!");
         return rejectWithValue("Authentication required");
       }
-      
+
       let response;
-      
+
       // Use the partner ID if available
       if (partnerId && partnerId !== "null" && partnerId !== "undefined") {
         console.log(`🎯 Calling partner-payout-currencies endpoint for partner_id: ${partnerId}`);
         console.log(`📍 URL: ${API_URL}/partner-payout-currencies/${partnerId}`);
-        
+
         response = await axios.get(
           `${API_URL}/partner-payout-currencies/${partnerId}`,
           {
@@ -442,13 +398,13 @@ export const fetchPayoutCurrencies = createAsyncThunk(
           }
         );
       }
-      
+
       console.log("✅ Payout currencies response:", response.data);
       return response.data;
     } catch (error) {
       console.error("❌ Error fetching payout currencies:", error);
       console.log("📦 Returning fallback payout currencies data");
-      
+
       // Return fallback data with the 3 currencies we expect
       return {
         data: [
@@ -472,6 +428,75 @@ export const fetchPayoutCurrencies = createAsyncThunk(
           }
         ]
       };
+    }
+  },
+);
+
+export const fetchRemittanceCurrencies = createAsyncThunk(
+  "remittance/fetchRemittanceCurrencies",
+  async (_, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("bearertoken");
+
+      const partnerId = localStorage.getItem("whitelabelledpartnerid")
+
+      const countryId = localStorage.getItem("countryId");
+
+      if (!token) {
+        return rejectWithValue("Authentication required");
+      }
+
+      if (!partnerId || !countryId) {
+        return rejectWithValue("Missing partner ID or country ID");
+      }
+
+      const response = await axios.get(
+        `${API_URL}/partners/remittance-currencies/${partnerId}/${countryId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data || error.message);
+    }
+  },
+);
+
+export const fetchManualRemittanceAccountDetails = createAsyncThunk(
+  "remittance/fetchManualRemittanceAccountDetails",
+  async (currencyId, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem("bearertoken");
+
+      if (!token) {
+        return rejectWithValue("Authentication required");
+      }
+
+      if (!currencyId) {
+        return rejectWithValue("Currency ID is required to fetch account details");
+      }
+
+      console.log(
+        `🔍 Fetching manual remittance account details for currency_id: ${currencyId}`,
+      );
+
+      const response = await axios.get(
+        `${API_URL}/manual-remittance-account-details/${currencyId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        },
+      );
+
+      const accountData = response.data?.data || response.data;
+
+      return {
+        ...accountData,
+        is_remittance_only: true,
+      };
+    } catch (error) {
+      console.error("❌ Failed to fetch manual remittance account details:", error);
+      return rejectWithValue(error.response?.data || error.message);
     }
   },
 );
@@ -565,13 +590,13 @@ export const submitTransaction = createAsyncThunk(
         sender_bank_id: transactionData.sender_bank_id,
 
         ...(transactionData.isRecurring ||
-        transactionData.frequency ||
-        transactionData.custom_days
+          transactionData.frequency ||
+          transactionData.custom_days
           ? {
-              isRecurring: transactionData.isRecurring || "0",
-              frequency: transactionData.frequency || "",
-              custom_days: transactionData.custom_days || "",
-            }
+            isRecurring: transactionData.isRecurring || "0",
+            frequency: transactionData.frequency || "",
+            custom_days: transactionData.custom_days || "",
+          }
           : {}),
 
         agree_to_terms: "1",
@@ -716,7 +741,7 @@ export const checkTransactionLimit = createAsyncThunk(
   async ({ destinationCurrencyCode, amount }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem("bearertoken");
-      
+
       if (!token) {
         return rejectWithValue("Authentication required");
       }
@@ -783,6 +808,8 @@ const initialState = {
     receiveOptions: [],
     payoutCurrencies: null,
     loading: false,
+    remittanceCurrencies: [],
+    remittanceCurrenciesLoading: false,
   },
   bankAccounts: [],
   manualAccountDetails: null,
@@ -920,7 +947,8 @@ const remittanceSlice = createSlice({
       .addCase(fetchExchangeRate.fulfilled, (state, action) => {
         state.loading = false;
         state.formData.exchangeRate = parseFloat(action.payload.fxRate);
-        state.formData.fee = parseFloat(action.payload.fee) || 0;
+        state.formData.fee =
+          parseFloat(action.payload.fee ?? action.payload.payoutCharge) || 0;
         state.formData.conversionId = action.payload.conversion_id;
 
         state.exchangeRateData = {
@@ -981,6 +1009,19 @@ const remittanceSlice = createSlice({
         state.error =
           action.payload || "Failed to fetch manual account details";
       })
+      .addCase(fetchManualRemittanceAccountDetails.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchManualRemittanceAccountDetails.fulfilled, (state, action) => {
+        state.loading = false;
+        state.manualAccountDetails = action.payload;
+      })
+      .addCase(fetchManualRemittanceAccountDetails.rejected, (state, action) => {
+        state.loading = false;
+        state.manualAccountDetails = null;
+        state.error =
+          action.payload || "Failed to fetch manual remittance account details";
+      })
       .addCase(validatePromoCode.pending, (state) => {
         state.loading = true;
       })
@@ -1026,20 +1067,20 @@ const remittanceSlice = createSlice({
       .addCase(fetchPayoutCurrencies.fulfilled, (state, action) => {
         const apiData = action.payload;
         const currencies = apiData?.data || [];
-        
+
         console.log("📊 Processing payout currencies:", currencies);
-        
+
         state.currencies.receiveOptions = currencies;
         state.currencies.payoutCurrencies = apiData;
         state.currencies.loading = false;
-        
+
         // Find default currency (where default_remittance is "Y")
         const defaultCurrency = currencies.find(
           (currency) => currency.default_remittance === "Y"
         );
-        
+
         console.log("🎯 Default currency found:", defaultCurrency);
-        
+
         // Set default currency if exists and no currency is selected
         if (defaultCurrency && !state.formData.receiveCurrency) {
           state.formData.receiveCurrency = {
@@ -1067,6 +1108,19 @@ const remittanceSlice = createSlice({
       .addCase(fetchPayoutCurrencies.rejected, (state, action) => {
         state.currencies.loading = false;
         state.error = action.payload || "Failed to fetch payout currencies";
+      })
+      .addCase(fetchRemittanceCurrencies.pending, (state) => {
+        state.currencies.remittanceCurrenciesLoading = true;
+      })
+      .addCase(fetchRemittanceCurrencies.fulfilled, (state, action) => {
+        state.currencies.remittanceCurrenciesLoading = false;
+        state.currencies.remittanceCurrencies =
+          action.payload?.data || action.payload || [];
+      })
+      .addCase(fetchRemittanceCurrencies.rejected, (state, action) => {
+        state.currencies.remittanceCurrenciesLoading = false;
+        state.error =
+          action.payload || "Failed to fetch remittance currencies";
       })
       .addCase(submitTransaction.pending, (state) => {
         state.loading = true;
@@ -1142,5 +1196,7 @@ export const selectManualAccountDetails = (state) => state.remittance.manualAcco
 export const selectLoading = (state) => state.remittance.loading;
 export const selectError = (state) => state.remittance.error;
 export const selectTransactionResult = (state) => state.remittance.transactionResult;
+export const selectRemittanceCurrencies = (state) => state.remittance.currencies.remittanceCurrencies;
+
 
 export default remittanceSlice.reducer;
