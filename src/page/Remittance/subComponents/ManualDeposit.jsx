@@ -418,7 +418,11 @@ const ManualDeposit = ({
 
         // Wait for the bank fetch to complete
         const result = await dispatch(
-          fetchBeneficiaryBanks(selectedOption.id)
+          fetchBeneficiaryBanks({
+            customerId:
+              paramCustomerId || localStorage.getItem("customerId"),
+            beneficiaryId: selectedOption.id,
+          })
         ).unwrap();
 
         console.log("📋 Banks fetched successfully:", result);
@@ -487,6 +491,7 @@ const ManualDeposit = ({
       payoutMethodOptions,
       findMatchingOption,
       beneficiaryBanks,
+      paramCustomerId,
     ]
   );
 
