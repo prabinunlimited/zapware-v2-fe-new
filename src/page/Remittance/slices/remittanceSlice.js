@@ -188,13 +188,25 @@ export const fetchExchangeRate = createAsyncThunk(
 
         const responseData = response.data?.data || response.data || {};
 
+        if (
+          response.data?.status === "Error" ||
+          response.data?.status === "error" ||
+          (!responseData.fxRate && !responseData.exchange_rate)
+        ) {
+          return rejectWithValue(
+            response.data?.message || "Exchange rate unavailable",
+          );
+        }
+
+        const resolvedFxRate = responseData.fxRate || responseData.exchange_rate;
+
         return {
-          fxRate: responseData.fxRate || responseData.exchange_rate || 115,
+          fxRate: resolvedFxRate,
           fee: responseData.payoutCharge || responseData.fee || 0,
           converted_value:
             responseData.converted_value ||
             responseData.converted_amount ||
-            (parseFloat(amount) * (responseData.fxRate || 115)).toFixed(2),
+            (parseFloat(amount) * resolvedFxRate).toFixed(2),
           conversion_id:
             responseData.conversion_id ||
             responseData.id ||
@@ -235,15 +247,23 @@ export const fetchExchangeRate = createAsyncThunk(
             },
           },
         );
-
         console.log("✅ Regular API response:", response.data);
 
         const responseData = response.data;
 
+        if (
+          responseData?.status === "Error" ||
+          responseData?.status === "error" ||
+          (!responseData.fxRate && !responseData.converted_value)
+        ) {
+          return rejectWithValue(
+            responseData?.message || "Exchange rate unavailable",
+          );
+        }
+
         const fxRate =
           responseData.fxRate ||
-          responseData.converted_value / parseFloat(amount) ||
-          115;
+          responseData.converted_value / parseFloat(amount);
 
         return {
           ...responseData,
@@ -261,19 +281,9 @@ export const fetchExchangeRate = createAsyncThunk(
         status: error.response?.status,
       });
 
-      const fallbackData = {
-        fxRate: 115,
-        fee: 0,
-        converted_value: (parseFloat(amount) * 115).toFixed(2),
-        conversion_id: `fallback-${Date.now()}`,
-        is_remittance_only:
-          localStorage.getItem("isRemittanceOnlyCustomer") === "Y",
-        is_fallback: true,
-        error_message: error.message,
-      };
-
-      console.log("🔄 Returning fallback data:", fallbackData);
-      return fallbackData;
+      return rejectWithValue(
+        error.response?.data?.message || error.message || "Failed to fetch exchange rate",
+      );
     }
   },
 );
@@ -810,6 +820,7 @@ const initialState = {
     loading: false,
     remittanceCurrencies: [],
     remittanceCurrenciesLoading: false,
+    remittanceCurrenciesError: null,
   },
   bankAccounts: [],
   manualAccountDetails: null,
@@ -945,6 +956,11 @@ const remittanceSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchExchangeRate.fulfilled, (state, action) => {
+        if (!action.payload?.fxRate || isNaN(parseFloat(action.payload.fxRate))) {
+          state.loading = false;
+          state.error = "Exchange rate unavailable";
+          return;
+        }
         state.loading = false;
         state.formData.exchangeRate = parseFloat(action.payload.fxRate);
         state.formData.fee =
@@ -971,6 +987,7 @@ const remittanceSlice = createSlice({
       .addCase(fetchExchangeRate.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Failed to fetch exchange rate";
+        state.exchangeRateData = null;
       })
       .addCase(fetchBankAccounts.pending, (state) => {
         state.currencies.loading = true;
@@ -978,9 +995,15 @@ const remittanceSlice = createSlice({
       .addCase(fetchBankAccounts.fulfilled, (state, action) => {
         state.bankAccounts = action.payload;
         state.currencies.loading = false;
-        state.customerType.isRemittanceOnly = false;
 
-        if (action.payload.length > 0 && !state.formData.sendCurrency) {
+        const isRemittanceOnly =
+          localStorage.getItem("isRemittanceOnlyCustomer") === "Y";
+
+        if (
+          !isRemittanceOnly &&
+          action.payload.length > 0 &&
+          !state.formData.sendCurrency
+        ) {
           const defaultCurrency =
             action.payload.find((acc) => acc.currency_code === "USD") ||
             action.payload[0];
@@ -1114,13 +1137,38 @@ const remittanceSlice = createSlice({
       })
       .addCase(fetchRemittanceCurrencies.fulfilled, (state, action) => {
         state.currencies.remittanceCurrenciesLoading = false;
-        state.currencies.remittanceCurrencies =
-          action.payload?.data || action.payload || [];
+        const list = action.payload?.data || action.payload || [];
+        state.currencies.remittanceCurrencies = list;
+        state.currencies.remittanceCurrenciesError =
+          action.payload?.success === false
+            ? action.payload?.message
+            : null;
+
+        // Clear any bad default (e.g. USD from bankAccounts) if it isn't
+        // actually in this customer's allowed remittance currencies.
+        if (state.formData.sendCurrency) {
+          const stillValid = list.some(
+            (c) => c.currency_code === state.formData.sendCurrency.value,
+          );
+          if (!stillValid) {
+            state.formData.sendCurrency = null;
+          }
+        }
+
+        if (!state.formData.sendCurrency && list.length > 0) {
+          const first = list[0];
+          state.formData.sendCurrency = {
+            value: first.currency_code,
+            label: first.currency_code,
+            currency_id: first.currency_id,
+            bank_enabled: first.bank_enabled,
+          };
+        }
       })
       .addCase(fetchRemittanceCurrencies.rejected, (state, action) => {
         state.currencies.remittanceCurrenciesLoading = false;
-        state.error =
-          action.payload || "Failed to fetch remittance currencies";
+        state.currencies.remittanceCurrenciesError =
+          action.payload?.message || action.payload || "Failed to fetch remittance currencies";
       })
       .addCase(submitTransaction.pending, (state) => {
         state.loading = true;
@@ -1197,6 +1245,6 @@ export const selectLoading = (state) => state.remittance.loading;
 export const selectError = (state) => state.remittance.error;
 export const selectTransactionResult = (state) => state.remittance.transactionResult;
 export const selectRemittanceCurrencies = (state) => state.remittance.currencies.remittanceCurrencies;
-
+export const selectRemittanceCurrenciesError = (state) => state.remittance.currencies.remittanceCurrenciesError;
 
 export default remittanceSlice.reducer;
