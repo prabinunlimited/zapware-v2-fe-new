@@ -318,7 +318,7 @@ const RequestToPay = () => {
             dueDate: "",
             reason: null,
             websiteUrl: "",
-            statementFile: null,
+            statementFile: "",
         });
         setCountryInputText("");
         setPhoneInputText("");
