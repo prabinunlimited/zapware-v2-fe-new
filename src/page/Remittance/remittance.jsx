@@ -138,6 +138,10 @@ const Remittance = () => {
     (state) => state.remittanceStatic,
   );
 
+  const remittanceCurrenciesError = useSelector(
+    (state) => state.remittance.currencies.remittanceCurrenciesError,
+  );
+
   const silaBankAccounts = useSelector(selectUSDBankAccounts);
   const hasSilaAccounts = useSelector(selectHasSilaAccounts);
   const silaAccountsLoading = useSelector(selectUSDAccountsLoading);
@@ -149,6 +153,8 @@ const Remittance = () => {
 
   // Local state for amount validation
   const [amountError, setAmountError] = useState(null);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
 
   // Use local state if available, otherwise use Redux state
   const selectedSilaBankAccount = localSelectedBankAccount || reduxSelectedSilaBankAccount;
@@ -623,6 +629,7 @@ const Remittance = () => {
       const cachedData = exchangeRateCache.current[cacheKey];
       if (cachedData && now - cachedData.timestamp < 45000) {
         if (isMounted) {
+          setExchangeRateLoading(false);
           dispatch({
             type: "remittance/setExchangeRateData",
             payload: cachedData.data,
@@ -645,6 +652,10 @@ const Remittance = () => {
       isRequestInProgress.current = true;
       lastApiCallTime.current = now;
 
+      if (isMounted) {
+        setExchangeRateLoading(true);
+      }
+
       const payload = {
         fromCurrency: sendCurrencyValue,
         toCurrency: receiveCurrencyValue,
@@ -655,13 +666,29 @@ const Remittance = () => {
 
       try {
         const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+
+        if (response?.status === "Error" || response?.status === "error") {
+          if (isMounted) {
+            setExchangeRateError(response.message || "Exchange rate unavailable");
+            dispatch(setExchangeRateData(null));
+          }
+          return;
+        }
+
         if (isMounted && response) {
           isManualUpdate.current = true;
 
           const fxRate =
             response.fxRate ||
-            response.converted_value / amountForCalculation ||
-            115;
+            response.converted_value / amountForCalculation;
+
+          if (!fxRate) {
+            setExchangeRateError("Exchange rate unavailable");
+            dispatch(setExchangeRateData(null));
+            return;
+          }
+
+          setExchangeRateError(null);
 
           const exchangeData = {
             ...response,
@@ -707,7 +734,16 @@ const Remittance = () => {
         }
       } catch (error) {
         console.error("Exchange rate fetch error:", error);
+        if (isMounted) {
+          const errMsg =
+            typeof error === "string"
+              ? error
+              : error?.message || error?.data?.message || "Exchange rate unavailable";
+          setExchangeRateError(errMsg);
+          dispatch(setExchangeRateData(null));
+        }
       } finally {
+        setExchangeRateLoading(false);
         if (isMounted) {
           setTimeout(() => {
             isManualUpdate.current = false;
@@ -1086,6 +1122,8 @@ const Remittance = () => {
       }-${parseFloat(formData.sendAmount) || 5}`;
     delete exchangeRateCache.current[cacheKey];
 
+    setExchangeRateLoading(true);
+
     try {
       const payload = {
         fromCurrency: formData.sendCurrency.value,
@@ -1096,11 +1134,25 @@ const Remittance = () => {
       };
 
       const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+
+      if (response?.status === "Error" || response?.status === "error") {
+        setExchangeRateError(response.message || "Exchange rate unavailable");
+        dispatch(setExchangeRateData(null));
+        return;
+      }
+
       if (response) {
         const fxRate =
           response.fxRate ||
-          response.converted_value / (parseFloat(formData.sendAmount) || 5) ||
-          115;
+          response.converted_value / (parseFloat(formData.sendAmount) || 5);
+
+        if (!fxRate) {
+          setExchangeRateError("Exchange rate unavailable");
+          dispatch(setExchangeRateData(null));
+          return;
+        }
+
+        setExchangeRateError(null);
 
         const exchangeData = {
           ...response,
@@ -1129,6 +1181,14 @@ const Remittance = () => {
       }
     } catch (error) {
       console.error("Error fetching exchange rate manually:", error);
+      const errMsg =
+        typeof error === "string"
+          ? error
+          : error?.message || error?.data?.message || "Exchange rate unavailable";
+      setExchangeRateError(errMsg);
+      dispatch(setExchangeRateData(null));
+    } finally {
+      setExchangeRateLoading(false);
     }
   }, [
     formData.sendCurrency,
@@ -1292,6 +1352,7 @@ const Remittance = () => {
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
       setAmountError(null); // Clear amount error when currency changes
+      setExchangeRateError(null);
 
       if (isRemittanceOnlyCustomer && option?.bank_enabled === false) {
         dispatch(setPaymentMethod("manual"));
@@ -1315,6 +1376,7 @@ const Remittance = () => {
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
       setAmountError(null); // Clear amount error when currency changes
+      setExchangeRateError(null);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.includes(`-${option?.value}-`)) {
@@ -2425,12 +2487,12 @@ const Remittance = () => {
                     </div>
 
                     <div className="text-right min-w-[80px]">
-                      <button
+                    <button
                         onClick={fetchExchangeRateManual}
                         className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 justify-end w-full"
-                        disabled={loading}
+                        disabled={exchangeRateLoading}
                       >
-                        {loading ? (
+                        {exchangeRateLoading ? (
                           <>
                             <FaSpinner className="w-3 h-3 animate-spin" />
                             <span>...</span>
@@ -2444,6 +2506,20 @@ const Remittance = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+
+{exchangeRateLoading && !exchangeRateData?.fxRate && (
+                <div className="py-3 px-6 bg-indigo-50/30 border-y border-indigo-100 flex items-center gap-2">
+                  <FaSpinner className="w-4 h-4 text-indigo-500 flex-shrink-0 animate-spin" />
+                  <p className="text-sm text-indigo-700">Fetching exchange rate...</p>
+                </div>
+              )}
+
+              {!exchangeRateLoading && exchangeRateError && !exchangeRateData?.fxRate && (
+                <div className="py-3 px-6 bg-red-50 border-y border-red-100 flex items-center gap-2">
+                  <FaExclamationTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{exchangeRateError}</p>
                 </div>
               )}
 
@@ -2633,6 +2709,7 @@ const Remittance = () => {
                 manualAccountDetails={manualAccountDetails}
                 manualAccountError={manualAccountError}
                 manualDetailsLoading={manualDetailsLoading}
+                remittanceCurrenciesError={remittanceCurrenciesError}
                 formData={formData}
                 copyToClipboard={copyToClipboard}
                 copiedField={copiedField}
@@ -3163,6 +3240,7 @@ const ManualDepositSection = ({
   manualAccountDetails,
   manualAccountError,
   manualDetailsLoading,
+  remittanceCurrenciesError,
   formData,
   copyToClipboard,
   copiedField,
@@ -3222,10 +3300,10 @@ const ManualDepositSection = ({
             <FaUniversity className="w-8 h-8 text-slate-400" />
           </div>
           <h4 className="text-lg font-semibold text-slate-900 mb-2">
-            Enter Transfer Amount
+            {remittanceCurrenciesError ? "Manual Deposit Unavailable" : "Enter Transfer Amount"}
           </h4>
           <p className="text-slate-600">
-            Please enter the amount you wish to send to view deposit details
+            {remittanceCurrenciesError}
           </p>
         </div>
       </div>
