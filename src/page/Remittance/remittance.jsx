@@ -938,22 +938,25 @@ const Remittance = () => {
     let isMounted = true;
     let fetchTimer;
 
-    const fetchDetails = async () => {
-      const hasIdentifier = isRemittanceOnlyCustomer
-        ? formData.sendCurrency?.currency_id
-        : formData.sendCurrency?.bank_id;
+    const hasIdentifier = isRemittanceOnlyCustomer
+    ? formData.sendCurrency?.currency_id
+    : formData.sendCurrency?.bank_id;
 
-      if (
-        formData.paymentMethod === "manual" &&
-        hasIdentifier &&
-        formData.sendCurrency?.value
-      ) {
-        if (isMounted) {
-          setManualDetailsLoading(true);
-          setManualAccountError(null);
-        }
+  const shouldFetch =
+    formData.paymentMethod === "manual" &&
+    hasIdentifier &&
+    formData.sendCurrency?.value;
 
-        try {
+  if (shouldFetch && isMounted) {
+    setManualDetailsLoading(true);
+    setManualAccountError(null);
+  } else if (isMounted) {
+    setManualAccountError(null);
+  }
+
+  const fetchDetails = async () => {
+    if (shouldFetch) {
+      try {
           const result = isRemittanceOnlyCustomer
             ? await dispatch(
               fetchManualRemittanceAccountDetails(
@@ -2540,16 +2543,14 @@ const Remittance = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
+                <div className="flex-1">
                     <div className="relative">
                       <input
                         type="text"
                         value={formData.receiveAmount || ""}
-                        onChange={(e) =>
-                          handleReceiveAmountChange(e.target.value)
-                        }
+                        readOnly
                         placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-emerald-50 border border-emerald-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all duration-200"
+                        className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-emerald-50 border border-emerald-200 rounded-xl cursor-not-allowed transition-all duration-200"
                         inputMode="decimal"
                       />
                     </div>
