@@ -481,6 +481,7 @@ export const verifyPasscode = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
             message: "Login successful",
           };
         }
@@ -794,6 +795,7 @@ export const verifyOTP = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
             message: "Login successful",
           };
         }

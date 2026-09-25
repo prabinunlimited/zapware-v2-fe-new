@@ -41,6 +41,8 @@ import {
   SafeErrorDisplay,
 } from "../../utils/errorHandling";
 
+import FundingAccountModal from "../../components/PopupModal/FundingAccountModal";
+
 // ✅ API URL from environment variable
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -125,6 +127,10 @@ const HomepageContent = React.memo(() => {
     return value === "Y";
   }, []);
 
+  const hasAppliedZaiAccount = useMemo(() => {
+    return localStorage.getItem("applied_zai_account") === "Y";
+  }, [])
+
   // Redux Selectors
   const accounts = useSelector(selectAccounts);
   const selectedCurrency = useSelector(selectSelectedCurrency);
@@ -148,6 +154,8 @@ const HomepageContent = React.memo(() => {
   const [textColor, setTextColor] = useState("#000000");
   const [componentError, setComponentError] = useState(null);
   const [emergencyStop, setEmergencyStop] = useState(false);
+
+  const [isFundingAccountModalOpen, setIsFundingAccountModalOpen] = useState(false);
 
   // ✅ State for transaction data
   const [transactionData, setTransactionData] = useState(null);
@@ -305,19 +313,19 @@ const HomepageContent = React.memo(() => {
 
   const handleRefreshTransactions = useCallback(async () => {
     console.log("🔄 Manual refresh triggered for remittance-only customer");
-    
+
     // Reset transaction fetch state
     transactionsFetchedRef.current = false;
     setHasFetchedTransactions(false);
     setTransactionData(null);
     setTransactionError(null);
-    
+
     // Clear API cache for this endpoint
     const transactionEndpoint = `/transactions/currency-transaction-details/${customerId}/all`;
     const fullUrl = `${API_URL}${transactionEndpoint}`;
     const transactionSig = `GET-${fullUrl}-{}`;
     apiCoordinator.clearCache(transactionSig); // If your apiCoordinator has this method
-    
+
     // Fetch fresh data
     await fetchTransactionDetails();
   }, [customerId, API_URL, fetchTransactionDetails]);
@@ -681,9 +689,24 @@ const HomepageContent = React.memo(() => {
             </div>
           )}
 
+          <FundingAccountModal
+            isOpen={isFundingAccountModalOpen}
+            onClose={() => setIsFundingAccountModalOpen(false)}
+          />
 
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
+            {hasAppliedZaiAccount && (
+              <div className="flex justify-end mb-4">
+                <button
+                  type="button"
+                  onClick={() => setIsFundingAccountModalOpen(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl shadow-sm hover:shadow transition-all duration-200"
+                >
+                  + Add Funding Account
+                </button>
+              </div>
+            )}
             <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
               {/* Navigation Section - Conditionally rendered */}
               {/* {shouldShowNavigation && (
