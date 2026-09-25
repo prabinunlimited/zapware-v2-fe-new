@@ -42,6 +42,7 @@ import {
 } from "../../utils/errorHandling";
 
 import FundingAccountModal from "../../components/PopupModal/FundingAccountModal";
+import ViewFundingAccountsModal from "../../components/PopupModal/ViewFundingAccountsModal";
 
 // ✅ API URL from environment variable
 const API_URL = import.meta.env.VITE_API_URL;
@@ -156,6 +157,7 @@ const HomepageContent = React.memo(() => {
   const [emergencyStop, setEmergencyStop] = useState(false);
 
   const [isFundingAccountModalOpen, setIsFundingAccountModalOpen] = useState(false);
+  const [isViewFundingAccountsOpen, setIsViewFundingAccountsOpen] = useState(false);
 
   // ✅ State for transaction data
   const [transactionData, setTransactionData] = useState(null);
@@ -694,10 +696,15 @@ const HomepageContent = React.memo(() => {
             onClose={() => setIsFundingAccountModalOpen(false)}
           />
 
+          <ViewFundingAccountsModal
+            isOpen={isViewFundingAccountsOpen}
+            onClose={() => setIsViewFundingAccountsOpen(false)}
+          />
+
           {/* Main content area */}
           <div className="p-2 mt-2 relative">
             {hasAppliedZaiAccount && (
-              <div className="flex justify-end mb-4">
+              <div className="flex justify-end items-center gap-3 mb-4">
                 <button
                   type="button"
                   onClick={() => setIsFundingAccountModalOpen(true)}
@@ -705,6 +712,19 @@ const HomepageContent = React.memo(() => {
                 >
                   + Add Funding Account
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setIsViewFundingAccountsOpen(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-xl shadow-sm transition-all duration-200"
+                >
+                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  View Funding Accounts
+                </button>
+
+
               </div>
             )}
             <div className="flex flex-col lg:flex-row gap-4 w-full mx-auto relative">
