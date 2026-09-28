@@ -481,6 +481,8 @@ export const verifyPasscode = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
+            hasSilaBankAccount: responseData.hasSilaBankAccount || null,
             message: "Login successful",
           };
         }
@@ -794,6 +796,8 @@ export const verifyOTP = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
+            hasSilaBankAccount: responseData.hasSilaBankAccount || null,
             message: "Login successful",
           };
         }
@@ -1612,6 +1616,7 @@ export const logoutUser = createAsyncThunk(
       localStorage.removeItem('authcustomer_id');
       localStorage.removeItem('currentCustomerId');
       localStorage.removeItem('bearertoken');
+      localStorage.removeItem('hasSilaBankAccount');
 
       dispatch({ type: "auth/clearAuthState" });
       return true;

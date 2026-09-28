@@ -835,6 +835,12 @@ const Login = () => {
           if (processedData.beneficaryId) {
             localStorage.setItem('beneficaryId', processedData.beneficaryId);
           }
+          if (processedData.applied_zai_account) {
+            localStorage.setItem('applied_zai_account', processedData.applied_zai_account);
+          }
+          if (processedData.hasSilaBankAccount) {
+            localStorage.setItem('hasSilaBankAccount', processedData.hasSilaBankAccount);
+          }
 
           dispatch(setAuthState(authState));
           await fetchAndStoreLogoutTime();
@@ -1767,6 +1773,12 @@ const Login = () => {
         if (processedData.beneficaryId) {
           localStorage.setItem('beneficaryId', processedData.beneficaryId);
         }
+        if (processedData.applied_zai_account) {
+          localStorage.setItem('applied_zai_account', processedData.applied_zai_account);
+        }
+        if (processedData.hasSilaBankAccount) {
+          localStorage.setItem('hasSilaBankAccount', processedData.hasSilaBankAccount);
+        }
 
         await fetchAndStoreLogoutTime();
         dispatch(setPasscode(new Array(6).fill("")));
@@ -2058,6 +2070,12 @@ const Login = () => {
         }
         if (result.beneficaryId) {
           localStorage.setItem('beneficaryId', result.beneficaryId);
+        }
+        if (result.applied_zai_account) {
+          localStorage.setItem('applied_zai_account', result.applied_zai_account);
+        }
+        if (result.hasSilaBankAccount) {
+          localStorage.setItem('hasSilaBankAccount', result.hasSilaBankAccount);
         }
 
         await fetchAndStoreLogoutTime();
