@@ -178,8 +178,10 @@ const Remittance = () => {
   const [activeCard, setActiveCard] = useState(null);
   const [pendingNewBeneficiaryId, setPendingNewBeneficiaryId] = useState(null);
 
-
   const [showBankLinkReminder, setShowBankLinkReminder] = useState(() => {
+    const hasSilaBankAccount = localStorage.getItem('hasSilaBankAccount') === 'Y';
+    if (!hasSilaBankAccount) return false;
+
     // Check if user has already seen the reminder
     const hasSeenBankReminder = localStorage.getItem('has_seen_bank_reminder');
     return !hasSeenBankReminder; // Show only if not seen before
@@ -939,24 +941,24 @@ const Remittance = () => {
     let fetchTimer;
 
     const hasIdentifier = isRemittanceOnlyCustomer
-    ? formData.sendCurrency?.currency_id
-    : formData.sendCurrency?.bank_id;
+      ? formData.sendCurrency?.currency_id
+      : formData.sendCurrency?.bank_id;
 
-  const shouldFetch =
-    formData.paymentMethod === "manual" &&
-    hasIdentifier &&
-    formData.sendCurrency?.value;
+    const shouldFetch =
+      formData.paymentMethod === "manual" &&
+      hasIdentifier &&
+      formData.sendCurrency?.value;
 
-  if (shouldFetch && isMounted) {
-    setManualDetailsLoading(true);
-    setManualAccountError(null);
-  } else if (isMounted) {
-    setManualAccountError(null);
-  }
+    if (shouldFetch && isMounted) {
+      setManualDetailsLoading(true);
+      setManualAccountError(null);
+    } else if (isMounted) {
+      setManualAccountError(null);
+    }
 
-  const fetchDetails = async () => {
-    if (shouldFetch) {
-      try {
+    const fetchDetails = async () => {
+      if (shouldFetch) {
+        try {
           const result = isRemittanceOnlyCustomer
             ? await dispatch(
               fetchManualRemittanceAccountDetails(
@@ -2490,7 +2492,7 @@ const Remittance = () => {
                     </div>
 
                     <div className="text-right min-w-[80px]">
-                    <button
+                      <button
                         onClick={fetchExchangeRateManual}
                         className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 justify-end w-full"
                         disabled={exchangeRateLoading}
@@ -2512,7 +2514,7 @@ const Remittance = () => {
                 </div>
               )}
 
-{exchangeRateLoading && !exchangeRateData?.fxRate && (
+              {exchangeRateLoading && !exchangeRateData?.fxRate && (
                 <div className="py-3 px-6 bg-indigo-50/30 border-y border-indigo-100 flex items-center gap-2">
                   <FaSpinner className="w-4 h-4 text-indigo-500 flex-shrink-0 animate-spin" />
                   <p className="text-sm text-indigo-700">Fetching exchange rate...</p>
@@ -2543,7 +2545,7 @@ const Remittance = () => {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
+                  <div className="flex-1">
                     <div className="relative">
                       <input
                         type="text"
