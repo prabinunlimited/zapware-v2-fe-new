@@ -737,9 +737,9 @@ const Beneficiaries = ({ mode = "list" }) => {
                               <div className="text-sm font-medium text-gray-900">
                                 {beneficiary.name || "N/A"}
                               </div>
-                              <div className="text-sm text-gray-500">
+                              {/* <div className="text-sm text-gray-500">
                                 {beneficiary.relationtobenef || "N/A"}
-                              </div>
+                              </div> */}
                             </div>
                           </div>
                         </td>
