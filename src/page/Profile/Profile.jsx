@@ -28,6 +28,7 @@ import {
   FaChevronLeft,
   FaPlus,
   FaTrashAlt,
+  FaEye,
 } from "react-icons/fa";
 import { motion } from "framer-motion";
 
@@ -92,6 +93,189 @@ const defaultProfileData = {
   id_document_number: "",
   id_issuing_country_id: "",
   id_expiry_date: "",
+  id_issue_date: "",
+};
+
+// Expired ID & Missing Document Modal
+const ExpiredIdAlertModal = ({ isOpen, onClose, onAction, alertData }) => {
+  if (!isOpen) return null;
+
+  const { isExpired, isDocumentMissing, expiryDate } = alertData;
+
+  // Set accurate title and description according to the conditions
+  let title = "Action Required: Document Missing";
+  let description = "No ID document has been uploaded for your profile. Please upload a valid document.";
+
+  if (isExpired && isDocumentMissing) {
+    title = "Action Required: ID Expired & Document Missing";
+    description = "Your ID Document has expired and no document is uploaded. Please update and upload your document.";
+  } else if (isExpired) {
+    title = "Action Required: ID Expired";
+    description = "Your ID document has expired. Please update your document.";
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      {/* Frosted dark backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+
+      {/* Modal Dialog */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.92, y: 20 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 text-center border border-rose-100 overflow-hidden z-10"
+      >
+        <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-rose-50/80 via-amber-50/40 to-transparent pointer-events-none" />
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 transition-colors p-2 rounded-full focus:outline-none"
+          aria-label="Close modal"
+        >
+          <FaTimesCircle className="w-5 h-5" />
+        </button>
+
+        <div className="relative mx-auto w-20 h-20 mb-5 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-rose-100 animate-ping opacity-30" />
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/25">
+            <FaShieldAlt className="w-8 h-8 text-white" />
+          </div>
+          <span className="absolute bottom-0 right-1 w-6 h-6 rounded-full bg-white flex items-center justify-center shadow-md">
+            <span className="w-4 h-4 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center">
+              !
+            </span>
+          </span>
+        </div>
+
+        <h3 className="text-2xl font-extrabold text-slate-800 tracking-tight mb-2">
+          {title}
+        </h3>
+        <p className="text-sm text-slate-600 leading-relaxed max-w-sm mx-auto mb-5">
+          {description}
+        </p>
+
+        {/* Breakdown Card */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 text-left mb-6 space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">Document Status</span>
+            <span
+              className={`inline-flex items-center gap-1 font-semibold px-2 py-0.5 rounded-md border ${isExpired
+                ? "text-rose-600 bg-rose-50 border-rose-200"
+                : "text-emerald-600 bg-emerald-50 border-emerald-200"
+                }`}
+            >
+              ● {isExpired ? "Expired" : "Valid"}
+            </span>
+          </div>
+
+          {expiryDate && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-slate-500 font-medium">
+                {isExpired ? "Expired On" : "Valid Until"}
+              </span>
+              <span className={`font-semibold ${isExpired ? "text-rose-600" : "text-slate-700"}`}>
+                {expiryDate}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-slate-500 font-medium">Uploaded Document</span>
+            <span
+              className={`font-semibold ${isDocumentMissing ? "text-amber-600" : "text-emerald-600"
+                }`}
+            >
+              {isDocumentMissing ? "Not Uploaded" : "Uploaded"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-1/2 py-3 px-4 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all"
+          >
+            I'll Do This Later
+          </button>
+          <button
+            type="button"
+            onClick={onAction}
+            className="w-full sm:w-1/2 py-3 px-4 text-sm font-semibold text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 shadow-md hover:shadow-lg shadow-rose-500/20 rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <FaEdit className="w-3.5 h-3.5" />
+            Update Document
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
+
+const InvalidExpiryDateModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-md"
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        transition={{ type: "spring", stiffness: 300, damping: 25 }}
+        className="relative bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-rose-100 overflow-hidden z-10"
+      >
+        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-rose-50/80 via-amber-50/40 to-transparent pointer-events-none" />
+
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100/80 hover:bg-slate-200 transition-colors p-2 rounded-full focus:outline-none"
+          aria-label="Close modal"
+        >
+          <FaTimesCircle className="w-4 h-4" />
+        </button>
+
+        <div className="relative mx-auto w-16 h-16 mb-4 flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-rose-100 animate-ping opacity-30" />
+          <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-rose-500 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-500/25">
+            <FaCalendarAlt className="w-7 h-7 text-white" />
+          </div>
+        </div>
+
+        <h3 className="text-xl font-extrabold text-slate-800 tracking-tight mb-2">
+          Invalid Expiry Date
+        </h3>
+        <p className="text-sm text-slate-600 leading-relaxed max-w-xs mx-auto mb-6">
+          The expiry date can't be in the past. Please choose a date that is today or later.
+        </p>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full py-3 px-4 text-sm font-semibold text-white bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 shadow-md hover:shadow-lg shadow-rose-500/20 rounded-xl transition-all"
+        >
+          Got It
+        </button>
+      </motion.div>
+    </div>,
+    document.body
+  );
 };
 
 const Profile = () => {
@@ -220,6 +404,13 @@ const Profile = () => {
   });
   const [toast, setToast] = useState(null);
 
+  const [showExpiredIdModal, setShowExpiredIdModal] = useState(false);
+  const [docAlertState, setDocAlertState] = useState({
+    isExpired: false,
+    isDocumentMissing: false,
+    expiryDate: "",
+  });
+
   const [ownerDetails, setOwnerDetails] = useState(null);
 
   const [documentTypes, setDocumentTypes] = useState([]);
@@ -227,6 +418,34 @@ const Profile = () => {
   const [selectedDocumentType, setSelectedDocumentType] = useState(null);
   const [documentUploadLoading, setDocumentUploadLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+
+  const [newIdDocumentNumber, setNewIdDocumentNumber] = useState("");
+  const [newIdDocumentTypeId, setNewIdDocumentTypeId] = useState("");
+  const [newIdIssuingCountryId, setNewIdIssuingCountryId] = useState("");
+  const [newIdIssueDate, setNewIdIssueDate] = useState("");
+  const [newIdExpiryDate, setNewIdExpiryDate] = useState("");
+  const [expiryDateError, setExpiryDateError] = useState("");
+  const [showInvalidExpiryModal, setShowInvalidExpiryModal] = useState(false);
+  const [newIdFile, setNewIdFile] = useState(null);
+  const [newIdUploadLoading, setNewIdUploadLoading] = useState(false);
+
+  const [showViewDocumentModal, setShowViewDocumentModal] = useState(false);
+  const [viewDocumentUrl, setViewDocumentUrl] = useState(null);
+  const [viewDocumentLoading, setViewDocumentLoading] = useState(false);
+
+  const getCustomerUuid = () => {
+    return localStorage.getItem("customer_uuid") || localStorage.getItem("customerUuid");
+  };
+
+  const extractErrorMessage = (message) => {
+    if (!message) return null;
+    if (typeof message === "string") return message;
+    if (typeof message === "object") {
+      const allMessages = Object.values(message).flat();
+      return allMessages.length > 0 ? allMessages.join(" ") : null;
+    }
+    return String(message);
+  };
 
   // Check if account type is individual
   const isIndividualAccount = useMemo(() => {
@@ -407,6 +626,55 @@ const Profile = () => {
   ]);
   // =============== END FIX ===============
 
+  // Scroll down to the update document card
+  const handleGoToUpdateId = () => {
+    setShowExpiredIdModal(false);
+    const targetElement = document.getElementById("update-document-card");
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
+  // Check ID expiration and document missing status
+  useEffect(() => {
+    if (!profileData) return;
+
+    const expiryDateStr =
+      profileData.id_document_expiry_date ||
+      profileData.id_expiry_date ||
+      null;
+
+    // Check if document exists
+    const hasDocument = Boolean(
+      profileData.id_document_type_id ||
+      profileData.id_document_file ||
+      profileData.document_url ||
+      profileData.document_picture_front
+    );
+
+    let expired = false;
+    if (expiryDateStr) {
+      const expiryDate = new Date(expiryDateStr);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      expired = expiryDate < today;
+    }
+
+    const missing = !hasDocument;
+
+    // Show modal if document is missing OR expired
+    if (missing || expired) {
+      setDocAlertState({
+        isExpired: expired,
+        isDocumentMissing: missing,
+        expiryDate: expiryDateStr || "",
+      });
+      setShowExpiredIdModal(true);
+    } else {
+      setShowExpiredIdModal(false);
+    }
+  }, [profileData]);
+
   // Fetch additional profile data that's not in Redux
   useEffect(() => {
     const fetchAdditionalProfileData = async () => {
@@ -515,7 +783,7 @@ const Profile = () => {
       }
 
       // Get customerUuid from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid || !authtoken) {
         console.log("❌ Profile: Missing customerUuid or authtoken", {
@@ -611,6 +879,7 @@ const Profile = () => {
         id_document_number: profileData.id_document_number || "",
         id_issuing_country_id: profileData.id_document_type_country_id || "",
         id_expiry_date: profileData.id_document_expiry_date || "",
+        id_issue_date: profileData.id_document_issue_date || "",
       });
     }
   }, [profileData]);
@@ -828,12 +1097,14 @@ const Profile = () => {
         id_document_number: profileData?.id_document_number || "",
         id_issuing_country_id: profileData?.id_document_type_country_id || "",
         id_expiry_date: profileData?.id_document_expiry_date || "",
+        id_issue_date: profileData.id_document_issue_date || "",
       });
       if (profileData?.occupation_id) {
         const occ = occupations.find((o) => o.id === profileData.occupation_id);
         setSelectedOccupation(occ ? { value: occ.id, label: occ.name } : null);
       }
     }
+    setExpiryDateError("");
     setIsEditing((prev) => !prev);
   };
 
@@ -980,7 +1251,7 @@ const Profile = () => {
       const phoneCode = selectedCountry?.phone_code || "";
 
       // Get the customer UUID from localStorage (THIS IS THE CORRECT ONE)
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       console.log("🔍 Debug - Customer ID sources:", {
         customerUuid: customerUuid,
@@ -1065,7 +1336,7 @@ const Profile = () => {
 
     try {
       // Get the customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1130,7 +1401,7 @@ const Profile = () => {
 
     try {
       // Get the customer UUID from localStorage
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1215,7 +1486,7 @@ const Profile = () => {
     setEmailPasscodeRequestLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1287,7 +1558,7 @@ const Profile = () => {
     setEmailPasscodeRequestLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1350,7 +1621,7 @@ const Profile = () => {
     setEmailPasscodeLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1538,7 +1809,7 @@ const Profile = () => {
     setDocumentUploadLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -1611,6 +1882,177 @@ const Profile = () => {
     }
   };
 
+  const handleNewIdFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setModalData({
+          isOpen: true,
+          title: "File Too Large",
+          message: "Please upload a file up to 2MB in size.",
+          type: "error",
+        });
+        setIsModalOpen(true);
+        event.target.value = "";
+        return;
+      }
+      setNewIdFile(file);
+    }
+  };
+
+  const validateExpiryDate = (value) => {
+    if (!value || value.length < 10) {
+      setExpiryDateError("Please select an expiry date.");
+      setShowInvalidExpiryModal(true);
+      return false;
+    }
+
+    const selected = new Date(value);
+    if (isNaN(selected.getTime())) {
+      setExpiryDateError("Please enter a valid date.");
+      setShowInvalidExpiryModal(true);
+      return false;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (selected < today) {
+      setExpiryDateError("Expiry date cannot be in the past.");
+      setShowInvalidExpiryModal(true);
+      return false;
+    }
+
+    setExpiryDateError("");
+    return true;
+  };
+
+  const handleExpiryDateChange = (updateValue) => (e) => {
+    const value = e.target.value;
+    updateValue(value);
+    setExpiryDateError("");
+  };
+
+  const handleUploadNewId = async () => {
+    if (!newIdDocumentTypeId || !newIdDocumentNumber || !newIdIssuingCountryId || !newIdIssueDate || !newIdExpiryDate || !newIdFile) {
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: "Please fill in all ID fields and select a file.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+      return;
+    }
+
+    if (!validateExpiryDate(newIdExpiryDate)) {
+      return;
+    }
+    setNewIdUploadLoading(true);
+
+    try {
+      const customerUuid = getCustomerUuid();
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const loginUserType = localStorage.getItem("login_user_type");
+
+      const formData = new FormData();
+      formData.append("id_document_type_id", newIdDocumentTypeId);
+      formData.append("id_document_number", newIdDocumentNumber);
+      formData.append("id_issuing_country_id", newIdIssuingCountryId);
+      formData.append("id_expiry_date", newIdExpiryDate);
+      formData.append("id_issue_date", newIdIssueDate);
+      formData.append("id_document_file", newIdFile);
+      formData.append("updated_user_type", loginUserType || "");
+      formData.append("updated_user_uuid", customerUuid);
+
+      const response = await axios.post(
+        `${API_URL}/customers/update-individual-customer-document/${customerUuid}`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${authtoken}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      if (response.data.status === "success") {
+        setToast({ message: "New ID uploaded successfully!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+
+        setNewIdDocumentTypeId("");
+        setNewIdDocumentNumber("");
+        setNewIdIssuingCountryId("");
+        setNewIdIssueDate("");
+        setNewIdExpiryDate("");
+        setNewIdFile(null);
+
+        if (bearertoken) {
+          dispatch(fetchUserProfile({ customerId, bearertoken }));
+        }
+      } else {
+        throw new Error(extractErrorMessage(response.data.message) || "Failed to upload ID");
+      }
+    } catch (err) {
+      console.error("❌ Failed to upload new ID:", err);
+      setModalData({
+        isOpen: true,
+        title: "Upload Failed",
+        message: extractErrorMessage(err.response?.data?.message) || err.message || "Failed to upload ID. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setNewIdUploadLoading(false);
+    }
+  };
+
+  const handleViewDocument = async () => {
+    setShowViewDocumentModal(true);
+    setViewDocumentUrl(null);
+    setViewDocumentLoading(true);
+
+    try {
+      const customerUuid = getCustomerUuid();
+      if (!customerUuid) {
+        throw new Error("Customer UUID not found. Please logout and login again.");
+      }
+
+      const response = await axios.get(
+        `${API_URL}/customers/get-individual-customer-document/${customerUuid}`,
+        { headers: { Authorization: `Bearer ${bearertoken}` } }
+      );
+
+      const docUrl =
+        response.data?.data?.id_document_file ||
+        response.data?.data?.document_url ||
+        response.data?.id_document_file ||
+        response.data?.document_url ||
+        null;
+
+      if (docUrl) {
+        setViewDocumentUrl(docUrl);
+      } else {
+        throw new Error("No document found for this customer.");
+      }
+    } catch (err) {
+      console.error("❌ Failed to fetch document:", err);
+      setShowViewDocumentModal(false);
+      setModalData({
+        isOpen: true,
+        title: "Error",
+        message: err.response?.data?.message || err.message || "Failed to load document. Please try again.",
+        type: "error",
+      });
+      setIsModalOpen(true);
+    } finally {
+      setViewDocumentLoading(false);
+    }
+  };
+
   // Open delete confirmation for a controller
   const handleDeleteControllerClick = (controller) => {
     setControllerToDelete(controller);
@@ -1624,7 +2066,7 @@ const Profile = () => {
     setDeleteControllerLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
       const authCustomerId = localStorage.getItem("authcustomer_id");
 
       if (!customerUuid) {
@@ -1725,7 +2167,7 @@ const Profile = () => {
     setDeleteOwnerLoading(true);
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
       const authCustomerId = localStorage.getItem("authcustomer_id");
 
       if (!customerUuid) {
@@ -1792,6 +2234,10 @@ const Profile = () => {
       return;
     }
 
+    if (isIndividualAccount && !validateExpiryDate(editableData.id_expiry_date)) {
+      return;
+    }
+
     setSaveLoading(true);
     try {
       console.log("💾 Profile: Saving changes", editableData);
@@ -1800,7 +2246,7 @@ const Profile = () => {
 
       if (isIndividualAccount) {
         // Individual accounts use a dedicated endpoint with a different payload shape
-        const customerUuid = localStorage.getItem("customerUuid");
+        const customerUuid = getCustomerUuid();
         const authCustomerId = localStorage.getItem("authcustomer_id");
 
         if (!customerUuid) {
@@ -1843,6 +2289,7 @@ const Profile = () => {
           id_issuing_country_id: editableData.id_issuing_country_id
             ? parseInt(editableData.id_issuing_country_id, 10)
             : null,
+          id_issue_date: editableData.id_issue_date,
           id_expiry_date: editableData.id_expiry_date,
           updated_user_type: "customer",
           updated_user_id: authCustomerId ? parseInt(authCustomerId, 10) : null,
@@ -1952,7 +2399,7 @@ const Profile = () => {
     setSaveLoading(true); // ← Show loading spinner
 
     try {
-      const customerUuid = localStorage.getItem("customerUuid");
+      const customerUuid = getCustomerUuid();
 
       if (!customerUuid) {
         throw new Error("Customer UUID not found. Please logout and login again.");
@@ -3252,6 +3699,17 @@ const Profile = () => {
         />,
         document.body
       )}
+      {/* Expired ID / Missing Document Alert Modal */}
+      <ExpiredIdAlertModal
+        isOpen={showExpiredIdModal}
+        onClose={() => setShowExpiredIdModal(false)}
+        onAction={handleGoToUpdateId}
+        alertData={docAlertState}
+      />
+      <InvalidExpiryDateModal
+        isOpen={showInvalidExpiryModal}
+        onClose={() => setShowInvalidExpiryModal(false)}
+      />
       {/* Change Email/Mobile Modal */}
       {isChangeModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -3714,6 +4172,53 @@ const Profile = () => {
         authtoken={authtoken}
       />
 
+      {/* View Document Modal */}
+      {showViewDocumentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6"
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-800">ID Document</h3>
+              <button
+                onClick={() => {
+                  setShowViewDocumentModal(false);
+                  setViewDocumentUrl(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimesCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-center min-h-[300px]">
+              {viewDocumentLoading ? (
+                <RingLoader size={40} color="#3b82f6" />
+              ) : viewDocumentUrl ? (
+                /\.pdf($|\?)/i.test(viewDocumentUrl) ? (
+                  <iframe
+                    src={viewDocumentUrl}
+                    title="ID Document"
+                    className="w-full h-[500px] border border-gray-200 rounded-lg"
+                  />
+                ) : (
+                  <img
+                    src={viewDocumentUrl}
+                    alt="ID Document"
+                    className="max-w-full max-h-[500px] object-contain rounded-lg border border-gray-200"
+                  />
+                )
+              ) : (
+                <p className="text-gray-500 text-sm">No document available.</p>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {/* Delete Controller Confirmation Modal */}
       {showDeleteControllerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
@@ -3983,7 +4488,7 @@ const Profile = () => {
                             placeholder="First Name"
                           />
                         </div>
-                        {isIndividualAccount && (
+                        {isIndividualAccount && !isEditing && (
                           <div>
                             <label className="block text-xs text-gray-500 mb-1">
                               Middle Name
@@ -4461,6 +4966,23 @@ const Profile = () => {
                       </div>
 
                       <div>
+                        <label className="block text-xs text-gray-500 mb-1">ID Issue Date</label>
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            name="id_issue_date"
+                            value={editableData.id_issue_date || ''}
+                            onChange={handleInputChange}
+                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium text-gray-800 block py-2">
+                            {displayProfileData.id_document_issue_date || "N/A"}
+                          </span>
+                        )}
+                      </div>
+
+                      <div>
                         <label className="block text-xs text-gray-500 mb-1">ID Issuing Country</label>
                         {isEditing ? (
                           <Select
@@ -4483,14 +5005,20 @@ const Profile = () => {
                       </div>
 
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">ID Expiry Date</label>
+                        <div className="flex items-center gap-3 mb-1">
+                          <label className="block text-xs text-gray-500">ID Expiry Date</label>
+                        </div>
                         {isEditing ? (
                           <input
                             type="date"
                             name="id_expiry_date"
                             value={editableData.id_expiry_date}
-                            onChange={handleInputChange}
-                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            onChange={handleExpiryDateChange((value) =>
+                              setEditableData((prev) => ({ ...prev, id_expiry_date: value }))
+                            )}
+                            min={new Date().toISOString().split("T")[0]}
+                            className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${expiryDateError ? "border-red-500 bg-red-50" : "border-gray-300"
+                              }`}
                           />
                         ) : (
                           <span className="text-sm font-medium text-gray-800 block py-2">
@@ -4498,6 +5026,20 @@ const Profile = () => {
                           </span>
                         )}
                       </div>
+
+                      {!isEditing && (
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Document</label>
+                          <button
+                            type="button"
+                            onClick={handleViewDocument}
+                            className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 py-2"
+                          >
+                            <FaEye className="w-3.5 h-3.5" />
+                            View Document
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -4516,6 +5058,125 @@ const Profile = () => {
                   )}
                 </div>
               </div>
+
+              {/* Upload New ID Card */}
+              {isIndividualAccount && !isEditing && (
+                <div id="update-document-card" className="bg-white rounded-xl shadow-md p-6">
+                  <h2 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-100">
+                    Update Document
+                  </h2>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Document Type</label>
+                      {idDocumentTypesLoading ? (
+                        <div className="flex items-center py-2 text-sm text-gray-500">
+                          <RingLoader size={16} color="#3b82f6" />
+                          <span className="ml-2">Loading...</span>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <select
+                            value={newIdDocumentTypeId}
+                            onChange={(e) => setNewIdDocumentTypeId(e.target.value)}
+                            className="w-full appearance-none border border-gray-300 rounded px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="">Select document type</option>
+                            {idDocumentTypes.map((type) => (
+                              <option key={type.id} value={type.id}>{type.name}</option>
+                            ))}
+                          </select>
+                          <svg
+                            className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Document Number</label>
+                      <input
+                        value={newIdDocumentNumber}
+                        onChange={(e) => setNewIdDocumentNumber(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="Document number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">ID Issuing Country</label>
+                      <Select
+                        options={reduxCountries?.map((c) => ({ value: c.id, label: c.name })) || []}
+                        value={
+                          reduxCountries
+                            ?.map((c) => ({ value: c.id, label: c.name }))
+                            .find((opt) => String(opt.value) === String(newIdIssuingCountryId)) || null
+                        }
+                        onChange={(selectedOption) => setNewIdIssuingCountryId(selectedOption?.value || "")}
+                        placeholder="Select issuing country"
+                        isSearchable
+                        isLoading={countriesLoading}
+                        classNamePrefix="react-select"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Issue Date</label>
+                      <input
+                        type="date"
+                        value={newIdIssueDate}
+                        onChange={(e) => setNewIdIssueDate(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Expiry Date</label>
+                      <input
+                        type="date"
+                        value={newIdExpiryDate}
+                        onChange={handleExpiryDateChange(setNewIdExpiryDate)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className={`w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${expiryDateError ? "border-red-500 bg-red-50" : "border-gray-300"
+                          }`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Document File</label>
+                      <input
+                        type="file"
+                        onChange={handleNewIdFileChange}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                      />
+                      {newIdFile && (
+                        <p className="text-xs text-green-600 mt-1.5 truncate">
+                          Selected: {newIdFile.name} ({(newIdFile.size / 1024).toFixed(1)} KB)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end mt-4">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleUploadNewId}
+                      disabled={newIdUploadLoading}
+                      className={`text-white text-sm font-medium py-2 px-5 rounded-lg transition-colors flex items-center gap-2 ${headerColorProps.className}`}
+                      style={headerColorProps.style}
+                    >
+                      {newIdUploadLoading ? (
+                        <>
+                          <RingLoader size={16} color="#ffffff" />
+                          <span>Uploading...</span>
+                        </>
+                      ) : (
+                        "Upload ID"
+                      )}
+                    </motion.button>
+                  </div>
+                </div>
+              )}
 
               {/* Tabs Section - Show different tabs based on account type */}
               {availableTabs.length > 0 && (

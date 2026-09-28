@@ -520,6 +520,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     { value: "brother", label: "Brother" },
     { value: "cousin", label: "Cousin" },
     { value: "friend", label: "Friend" },
+    { value: "spouse", label: "Spouse" },
     { value: "customer", label: "Customer" },
     { value: "other", label: "Other" },
   ];
@@ -1437,7 +1438,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       return;
     }
 
-    let customerUuid = localStorage.getItem("userUuid") || localStorage.getItem("customerUuid");
+    let customerUuid = localStorage.getItem("userUuid") || localStorage.getItem("customer_uuid");
 
     if (!customerUuid) {
       const state = store.getState();
@@ -1661,7 +1662,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
           // Get customer UUID from localStorage
           const customerUuid = localStorage.getItem("userUuid") ||
-            localStorage.getItem("customerUuid") ||
+            localStorage.getItem("customer_uuid") ||
             localStorage.getItem("uuid");
 
           console.log("🔍 Customer UUID from localStorage:", customerUuid);
@@ -3556,7 +3557,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       onChange={(e) =>
                         handleBankAccountChange(index, "swift", e.target.value)
                       }
-                      // required
+                    // required
                     />
                   </div>
                 )}

@@ -1,304 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useParams } from "react-router-dom";
-
-// Professional Share Popup Component
-const SharePopup = ({
-  isOpen,
-  onClose,
-  requestRemitLink,
-  emailForm,
-  onEmailFormChange,
-  onEmailSend,
-  onCopyLink,
-}) => {
-  if (!isOpen) return null;
-
-  // Enhanced plain text email content
-  const generateEnhancedEmailContent = () => {
-    const currentDate = new Date().toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-
-    return `
-🔐 SECURE REMITTANCE REQUEST - ACTION REQUIRED
-
-Dear Recipient,
-
-You have received a secure remittance request that requires your immediate attention.
-
-📋 PAYMENT DETAILS:
-• Secure Payment Link: ${requestRemitLink}
-• Request Date: ${currentDate}
-• Status: Pending Your Action
-
-🚀 QUICK ACTIONS:
-1. Click the payment link above to access the secure payment portal
-2. Review the transaction details carefully
-3. Complete the payment using your preferred method
-4. Receive instant confirmation upon completion
-
-🛡️ SECURITY FEATURES:
-• End-to-end encryption
-• Real-time transaction monitoring
-• Secure payment processing
-• Instant confirmation
-
-⏰ TIME-SENSITIVE:
-This payment link is active for 7 days. We recommend completing the payment at your earliest convenience to avoid any processing delays.
-
-📞 SUPPORT INFORMATION:
-If you encounter any issues or have questions:
-• Support available 24/7
-• Typical response time: 15 minutes
-• Secure messaging through the payment portal
-
-🔒 IMPORTANT SECURITY NOTES:
-• This link is uniquely generated for you - do not share it with others
-• Always verify you're on a secure connection (https://)
-• Contact support immediately if you notice anything suspicious
-
-Best regards,
-Global Remittance Team
----
-This is an automated message from Global Remittance Portal.
-For security reasons, please do not reply to this email.
-Generated on ${currentDate}
-    `.trim();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-3 sm:p-4">
-      <div className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-2xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-200 flex-shrink-0">
-          <div className="flex items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3 min-w-0">
-              <div className="bg-gray-100 p-2 rounded-full flex-shrink-0">
-                <svg
-                  className="w-5 h-5 text-gray-700"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 truncate">
-                  Send Remittance Request
-                </h2>
-                <p className="text-gray-500 text-xs sm:text-sm">
-                  Send payment request directly to your beneficiary
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 p-2 rounded-full transition-colors flex-shrink-0"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
-          {/* Enhanced Message Preview Section */}
-          <div className="mb-6">
-            <div className="border border-dashed border-gray-200 rounded-lg p-4 sm:p-5 bg-gray-50">
-              <div className="text-center mb-3">
-                <div className="w-12 h-12 bg-gray-900 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={1.5}
-                      d="M3 19v-8.93a2 2 0 01.89-1.664l7-4.666a2 2 0 012.22 0l7 4.666A2 2 0 0121 10.07V19M3 19a2 2 0 002 2h14a2 2 0 002-2M3 19l6.75-4.5M21 19l-6.75-4.5M3 10l6.75 4.5M21 10l-6.75 4.5m0 0l-1.14.76a2 2 0 01-2.22 0l-1.14-.76"
-                    />
-                  </svg>
-                </div>
-                <h4 className="font-semibold text-gray-900 text-sm">
-                  Professional Email Content
-                </h4>
-                <p className="text-sm text-gray-500">
-                  Your recipient will receive this enhanced email message
-                  directly
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Link Section */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Payment Link
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2 sm:space-x-2 sm:gap-0">
-              <input
-                type="text"
-                value={requestRemitLink}
-                readOnly
-                className="flex-1 min-w-0 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-600 font-mono text-xs sm:text-sm truncate"
-              />
-              <button
-                onClick={onCopyLink}
-                className="px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium flex items-center justify-center space-x-2 flex-shrink-0"
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                  />
-                </svg>
-                <span>Copy</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Email Section */}
-          <div className="mb-2">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-              <svg
-                className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              Send Email Directly
-            </h3>
-
-            <div className="space-y-4 bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-100">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Recipient Email
-                </label>
-                <input
-                  type="email"
-                  name="to"
-                  value={emailForm.to}
-                  onChange={onEmailFormChange}
-                  placeholder="Enter recipient email address"
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Subject
-                </label>
-                <input
-                  type="text"
-                  name="subject"
-                  value={emailForm.subject}
-                  onChange={onEmailFormChange}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-900 focus:border-gray-900"
-                  placeholder="🔐 Secure Remittance Request - Action Required"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Message Preview
-                </label>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 max-h-32 overflow-y-auto">
-                  <pre className="text-xs sm:text-sm text-gray-500 whitespace-pre-wrap break-words">
-                    {generateEnhancedEmailContent().substring(0, 300)}...
-                  </pre>
-                </div>
-                <p className="text-xs text-gray-400 mt-1.5">
-                  Enhanced professional message will be sent directly
-                </p>
-              </div>
-
-              <button
-                onClick={onEmailSend}
-                disabled={!emailForm.to}
-                className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors flex items-center justify-center space-x-2 ${!emailForm.to
-                  ? "bg-gray-300 cursor-not-allowed"
-                  : "bg-gray-900 hover:bg-gray-800"
-                  }`}
-              >
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-                <span>Send Email Now</span>
-              </button>
-
-              <p className="text-xs text-gray-400 text-center">
-                The email will open in your default email client with the
-                message pre-filled
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 sm:px-6 py-4 border-t border-gray-200 flex-shrink-0">
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 justify-between sm:items-center">
-            <p className="text-xs sm:text-sm text-gray-500">
-              Email will be sent directly from your email client
-            </p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-900 text-sm font-medium transition-colors self-end sm:self-auto"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+import {
+  FaCopy,
+  FaExternalLinkAlt,
+  FaEnvelope,
+  FaCheck,
+  FaCheckCircle,
+} from "react-icons/fa";
 
 function BenefHome() {
   const { customerId } = useParams();
@@ -318,9 +26,18 @@ function BenefHome() {
   const [message, setMessage] = useState({ type: "", text: "" });
   const [errors, setErrors] = useState({});
   const [currenciesLoading, setCurrenciesLoading] = useState(false);
-  const [requestRemitLink, setRequestRemitLink] = useState(null);
-  const [showSharePopup, setShowSharePopup] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Link Modal State matching BenefRequestRemit
+  const [createdLinkModal, setCreatedLinkModal] = useState({
+    isOpen: false,
+    link: "",
+    message: "",
+    amount: "",
+    currency: "",
+  });
+  const [isCopied, setIsCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
+
   const [hasFetchedBeneficiary, setHasFetchedBeneficiary] = useState(false);
   // Dashboard state
   const [requestStatus, setRequestStatus] = useState([]);
@@ -333,12 +50,6 @@ function BenefHome() {
     completedTransactions: 0,
     totalAmount: 0,
   });
-  const [userEmail, setUserEmail] = useState("");
-  const [emailForm, setEmailForm] = useState({
-    to: "",
-    subject: "🔐 Secure Remittance Request - Action Required",
-    message: "",
-  });
 
   const [senders, setSenders] = useState([]);
   const [sendersLoading, setSendersLoading] = useState(false);
@@ -347,7 +58,7 @@ function BenefHome() {
   // Global loading state
   const [isLoading, setIsLoading] = useState(true);
 
-  // Add transaction stats state
+  // Transaction stats state
   const [transactionStats, setTransactionStats] = useState({
     totalTransactions: 0,
     transactionsPending: 0,
@@ -376,7 +87,6 @@ function BenefHome() {
   const calculateTransactionStats = useCallback((transactions) => {
     const totalTransactions = transactions?.length || 0;
 
-    // Updated status matching for API responses including "Processing-Payout"
     const transactionsPending =
       transactions?.filter((trans) => {
         const status = trans.status?.toLowerCase();
@@ -422,6 +132,40 @@ function BenefHome() {
     });
   }, []);
 
+  // Update dashboard statistics without overwriting across asynchronous calls
+  const updateStats = (requests, transacts) => {
+    setStats((prev) => ({
+      ...prev,
+      totalRequests:
+        requests !== undefined ? requests?.length || 0 : prev.totalRequests,
+      pendingRequests:
+        requests !== undefined
+          ? requests?.filter((req) =>
+              ["pending", "opened", "amount_changed"].includes(req.status)
+            ).length || 0
+          : prev.pendingRequests,
+      completedTransactions:
+        transacts !== undefined
+          ? transacts?.filter(
+              (trans) =>
+                trans.status === "completed" || trans.status === "approved"
+            ).length || 0
+          : prev.completedTransactions,
+      totalAmount:
+        transacts !== undefined
+          ? transacts?.reduce((sum, trans) => {
+              if (
+                trans.status === "completed" ||
+                trans.status === "approved"
+              ) {
+                return sum + (parseFloat(trans.amount) || 0);
+              }
+              return sum;
+            }, 0) || 0
+          : prev.totalAmount,
+    }));
+  };
+
   // Fetch currencies data
   const fetchCurrenciesData = useCallback(async () => {
     try {
@@ -445,7 +189,6 @@ function BenefHome() {
       }
 
       const data = await response.json();
-      console.log("Currencies API Response:", data);
 
       let currenciesArray = [];
 
@@ -465,7 +208,6 @@ function BenefHome() {
       setCurrencies(currenciesArray);
     } catch (error) {
       console.error("Failed to fetch currencies:", error);
-      // Set default currencies
       setCurrencies([
         { code: "USD", name: "US Dollar" },
         { code: "EUR", name: "Euro" },
@@ -477,11 +219,10 @@ function BenefHome() {
     }
   }, [API_URL]);
 
-  // Fetch transactions - FIXED: Accept beneficiaryId as parameter
+  // Fetch transactions
   const fetchTransactions = useCallback(
     async (benefId) => {
       if (!benefId) {
-        console.log("No beneficiaryId found:", benefId);
         return;
       }
 
@@ -491,10 +232,6 @@ function BenefHome() {
 
         const authtoken = getAuthToken();
 
-        console.log("Fetching transactions for beneficiary:", benefId);
-        console.log("Auth token present:", !!authtoken);
-
-        // Create headers with authentication
         const headers = {
           "Content-Type": "application/json",
         };
@@ -511,14 +248,10 @@ function BenefHome() {
           }
         );
 
-        console.log("Response status:", response.status);
-
-        // Handle redirects (302 status)
         if (response.status === 302) {
           const redirectUrl = response.headers.get("Location");
-          console.log("Redirect detected to:", redirectUrl);
           throw new Error(
-            `Request was redirected. This usually indicates authentication issues. Redirect URL: ${redirectUrl}`
+            `Request was redirected. Redirect URL: ${redirectUrl}`
           );
         }
 
@@ -527,10 +260,7 @@ function BenefHome() {
         }
 
         const data = await response.json();
-        console.log("Full Transactions API Response:", data);
-        console.log("Response data structure:", data);
 
-        // Handle the API response structure - EXACTLY like the first component
         let transactionsData = [];
 
         if (data.data?.transactionDetails) {
@@ -543,16 +273,12 @@ function BenefHome() {
           transactionsData = data;
         }
 
-        console.log("Extracted transactions:", transactionsData);
-
-        // Sort transactions by date (newest first) - like the first component
         const sortedTransactions = transactionsData.sort(
           (a, b) =>
             new Date(b.transaction_datetime || b.created_at) -
             new Date(a.transaction_datetime || a.created_at)
         );
 
-        // Map the API data to match your UI structure
         const mappedTransactions = sortedTransactions.map((transaction) => ({
           id: transaction.transaction_id || transaction.id,
           amount: transaction.instructed_amount || transaction.amount,
@@ -567,19 +293,14 @@ function BenefHome() {
           sender_name: transaction.sender_name,
         }));
 
-        console.log("Mapped transactions for UI:", mappedTransactions);
-
         setTransactions(mappedTransactions);
         calculateTransactionStats(mappedTransactions);
-
-        // Update stats with new transactions
-        updateStats(requestStatus, mappedTransactions);
+        updateStats(undefined, mappedTransactions);
 
         setMessage({ type: "", text: "" });
       } catch (error) {
         console.error("Error fetching transactions:", error);
 
-        // More detailed error handling
         if (error.message.includes("redirected")) {
           setMessage({
             type: "error",
@@ -602,7 +323,6 @@ function BenefHome() {
           });
         }
 
-        // Set empty transactions on error
         setTransactions([]);
         setTransactionStats({
           totalTransactions: 0,
@@ -610,15 +330,14 @@ function BenefHome() {
           transactionsPaid: 0,
           transactionsFailed: 0,
         });
-        throw error; // Re-throw to be caught by fetchAllData
       } finally {
         setTransactionsLoading(false);
       }
     },
     [API_URL, calculateTransactionStats]
-  ); // FIXED: Remove beneficiaryId dependency
+  );
 
-  // Fetch request status - FIXED: Accept beneficiaryId as parameter
+  // Fetch request status
   const fetchRequestStatus = useCallback(
     async (benefId) => {
       if (!benefId) return;
@@ -644,74 +363,30 @@ function BenefHome() {
         );
 
         if (!response.ok) {
-          // If endpoint doesn't exist, use mock data for demo
-          console.log("Request status endpoint not available, using mock data");
-          setRequestStatus([
-            {
-              id: 1,
-              amount: "1000.00",
-              currency: "USD",
-              request_remit_link: "https://ourzap.unlimitedremit.com/remittance-request/demo-1",
-              created_at: new Date().toISOString(),
-            },
-            {
-              id: 2,
-              amount: "2500.00",
-              currency: "EUR",
-              request_remit_link: "https://ourzap.unlimitedremit.com/remittance-request/demo-2",
-              created_at: new Date().toISOString(),
-            },
-          ]);
+          setRequestStatus([]);
           return;
         }
 
         const data = await response.json();
-        console.log("Request Status API Response:", data);
 
         if (data.data && Array.isArray(data.data)) {
           setRequestStatus(data.data.slice(0, 5));
-          updateStats(data.data, transactions);
+          updateStats(data.data, undefined);
         } else if (Array.isArray(data)) {
           setRequestStatus(data.slice(0, 5));
-          updateStats(data, transactions);
+          updateStats(data, undefined);
         } else {
-          // Fallback to mock data
-          setRequestStatus([
-            {
-              id: 1,
-              amount: "1000.00",
-              currency: "USD",
-              request_remit_link: "https://ourzap.unlimitedremit.com/remittance-request/demo-1",
-              created_at: new Date().toISOString(),
-            },
-          ]);
+          setRequestStatus([]);
         }
       } catch (error) {
         console.error("Failed to fetch request status:", error);
-        // Use mock data for demo purposes
-        setRequestStatus([
-          {
-            id: 1,
-            amount: "1000.00",
-            currency: "USD",
-            request_remit_link: "https://ourzap.unlimitedremit.com/remittance-request/demo-1",
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            amount: "2500.00",
-            currency: "EUR",
-            request_remit_link: "https://ourzap.unlimitedremit.com/remittance-request/demo-2",
-            created_at: new Date().toISOString(),
-          },
-        ]);
-        throw error; // Re-throw to be caught by fetchAllData
+        setRequestStatus([]);
       } finally {
         setStatusLoading(false);
       }
     },
     [API_URL]
-  ); // FIXED: Remove beneficiaryId dependency
+  );
 
   // Fetch senders data
   const fetchSenders = useCallback(
@@ -740,7 +415,6 @@ function BenefHome() {
 
         if (!response.ok) {
           if (response.status === 404) {
-            console.log("No senders found for this beneficiary");
             setSenders([]);
             return;
           }
@@ -748,9 +422,7 @@ function BenefHome() {
         }
 
         const data = await response.json();
-        console.log("Senders API Response:", data);
 
-        // Extract senders data from the response
         if (
           data.getbenefsendersacctobeneficiaryid_data &&
           Array.isArray(data.getbenefsendersacctobeneficiaryid_data)
@@ -758,8 +430,9 @@ function BenefHome() {
           const sendersData = data.getbenefsendersacctobeneficiaryid_data.map(
             (item) => ({
               id: item.customer_id,
-              full_name: `${item.customer?.first_name || ""} ${item.customer?.middle_name || ""
-                } ${item.customer?.last_name || ""}`
+              full_name: `${item.customer?.first_name || ""} ${
+                item.customer?.middle_name || ""
+              } ${item.customer?.last_name || ""}`
                 .trim()
                 .replace(/\s+/g, " "),
               first_name: item.customer?.first_name || "",
@@ -772,7 +445,6 @@ function BenefHome() {
           );
 
           setSenders(sendersData);
-          console.log("Processed senders:", sendersData);
         } else {
           setSenders([]);
         }
@@ -797,7 +469,6 @@ function BenefHome() {
         newSelection = [...prev, senderId];
       }
 
-      // Update formData with selected sender IDs
       setFormData((prevFormData) => ({
         ...prevFormData,
         senders: newSelection,
@@ -807,7 +478,6 @@ function BenefHome() {
     });
   };
 
-  // Handle select all senders
   const handleSelectAllSenders = () => {
     const allSenderIds = senders.map((sender) => sender.id);
     setSelectedSenders(allSenderIds);
@@ -817,42 +487,12 @@ function BenefHome() {
     }));
   };
 
-  // Handle clear all senders
   const handleClearAllSenders = () => {
     setSelectedSenders([]);
     setFormData((prevFormData) => ({
       ...prevFormData,
       senders: [],
     }));
-  };
-
-  // Update dashboard statistics
-  const updateStats = (requests, transacts) => {
-    const totalRequests = requests?.length || 0;
-    const pendingRequests =
-      requests?.filter((req) =>
-        ["pending", "opened", "amount_changed"].includes(req.status)
-      ).length || 0;
-
-    const completedTransactions =
-      transacts?.filter(
-        (trans) => trans.status === "completed" || trans.status === "approved"
-      ).length || 0;
-
-    const totalAmount =
-      transacts?.reduce((sum, trans) => {
-        if (trans.status === "completed" || trans.status === "approved") {
-          return sum + (parseFloat(trans.amount) || 0);
-        }
-        return sum;
-      }, 0) || 0;
-
-    setStats({
-      totalRequests,
-      pendingRequests,
-      completedTransactions,
-      totalAmount,
-    });
   };
 
   // Fetch beneficiary data
@@ -894,18 +534,15 @@ function BenefHome() {
       }
 
       const data = await response.json();
-      console.log("Beneficiary API Response:", data);
 
       if (data.data) {
         setBeneficiaryData(data.data);
         setHasFetchedBeneficiary(true);
 
-        // Extract benef_code from the response
         const benefCodeFromAPI =
           data.data.benef_code || data.data.benefCode || "";
         setBenefCode(benefCodeFromAPI);
 
-        // Update form data with beneficiary ID and first bank
         if (data.data.benef_banks && data.data.benef_banks.length > 0) {
           const firstBank = data.data.benef_banks[0];
           setFormData((prev) => ({
@@ -938,12 +575,11 @@ function BenefHome() {
       });
       setBeneficiaryData(null);
       setHasFetchedBeneficiary(false);
-      setBenefCode(""); // Reset benef_code on error
-      throw error; // Re-throw to be caught by fetchAllData
+      setBenefCode("");
     }
   };
 
-  // Fetch all data function - FIXED: Remove dependencies that cause re-renders
+  // Fetch all data
   const fetchAllData = useCallback(async () => {
     if (!urlBeneficiaryId) {
       setIsLoading(false);
@@ -954,18 +590,15 @@ function BenefHome() {
       setIsLoading(true);
       setMessage({ type: "", text: "" });
 
-      // Set beneficiary ID first
       setBeneficiaryId(urlBeneficiaryId);
 
-      // Fetch beneficiary data first (needed for other APIs)
       await fetchBeneficiaryData(urlBeneficiaryId);
 
-      // Then fetch all other data in parallel
       await Promise.all([
         fetchRequestStatus(urlBeneficiaryId),
         fetchTransactions(urlBeneficiaryId),
         fetchCurrenciesData(),
-        fetchSenders(urlBeneficiaryId), // Add this line
+        fetchSenders(urlBeneficiaryId),
       ]);
     } catch (error) {
       console.error("Error fetching all data:", error);
@@ -978,203 +611,86 @@ function BenefHome() {
     }
   }, [urlBeneficiaryId]);
 
-  // Enhanced email content generator
-  const generateEnhancedEmailContent = () => {
-    const currentDate = new Date().toLocaleDateString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+  // ---------- Gmail & Copy Helpers (from BenefRequestRemit) ----------
 
-    return `
-🔐 SECURE REMITTANCE REQUEST - ACTION REQUIRED
-
-Dear Recipient,
-
-You have received a secure remittance request that requires your immediate attention.
-
-📋 PAYMENT DETAILS:
-• Secure Payment Link: ${requestRemitLink}
-• Request Date: ${currentDate}
-• Status: Pending Your Action
-
-🚀 QUICK ACTIONS:
-1. Click the payment link above to access the secure payment portal
-2. Review the transaction details carefully
-3. Complete the payment using your preferred method
-4. Receive instant confirmation upon completion
-
-🛡️ SECURITY FEATURES:
-• End-to-end encryption
-• Real-time transaction monitoring
-• Secure payment processing
-• Instant confirmation
-
-⏰ TIME-SENSITIVE:
-This payment link is active for 7 days. We recommend completing the payment at your earliest convenience to avoid any processing delays.
-
-📞 SUPPORT INFORMATION:
-If you encounter any issues or have questions:
-• Support available 24/7
-• Typical response time: 15 minutes
-• Secure messaging through the payment portal
-
-🔒 IMPORTANT SECURITY NOTES:
-• This link is uniquely generated for you - do not share it with others
-• Always verify you're on a secure connection (https://)
-• Contact support immediately if you notice anything suspicious
-
-Best regards,
-Global Remittance Team
----
-This is an automated message from Global Remittance Portal.
-For security reasons, please do not reply to this email.
-Generated on ${currentDate}
-    `.trim();
+  const handleSendViaGmail = (link, amount, currency) => {
+    if (!link) return;
+    const subject = encodeURIComponent(
+      amount && currency
+        ? `Remittance Payment Request: ${amount} ${currency}`
+        : "Remittance Payment Request"
+    );
+    const body = encodeURIComponent(
+      `Hello,\n\nPlease use the following secure link to complete the requested remittance transfer${
+        amount && currency ? ` of ${amount} ${currency}` : ""
+      }:\n\n${link}\n\nThank you!`
+    );
+    window.open(
+      `https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`,
+      "_blank"
+    );
   };
 
-  // Copy to clipboard function
-  const copyToClipboard = async (text) => {
+  const handleCopyGeneratedLink = async () => {
+    if (!createdLinkModal.link) return;
     try {
-      await navigator.clipboard.writeText(text);
-      setCopySuccess(true);
-      setMessage({
-        type: "success",
-        text: "Copied to clipboard!",
-      });
-      setTimeout(() => setCopySuccess(false), 3000);
-    } catch (err) {
-      // Fallback for older browsers
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textArea);
-      setCopySuccess(true);
-      setMessage({
-        type: "success",
-        text: "Copied to clipboard!",
-      });
-      setTimeout(() => setCopySuccess(false), 3000);
+      await navigator.clipboard.writeText(createdLinkModal.link);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
     }
   };
 
-  // Send email directly function
-  const sendEmailDirectly = () => {
-    if (!emailForm.to) {
-      setMessage({
-        type: "error",
-        text: "Please enter recipient email address",
-      });
-      return;
-    }
-
-    const subject = encodeURIComponent(emailForm.subject);
-    const body = encodeURIComponent(emailForm.message);
-    const to = encodeURIComponent(emailForm.to);
-
-    // Use mailto link to open default email client
-    const mailtoLink = `mailto:${to}?subject=${subject}&body=${body}`;
-
-    // Open the email client
-    window.location.href = mailtoLink;
-
-    // Show success message
-    setMessage({
-      type: "success",
-      text: "Email client opened with pre-filled message!",
-    });
-
-    // Close the popup after a short delay
-    setTimeout(() => {
-      setShowSharePopup(false);
-    }, 2000);
-  };
-
-  // Update the email form handler
-  const handleEmailFormChange = (e) => {
-    const { name, value } = e.target;
-    setEmailForm((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  // Copy link function
-  const handleCopyLink = () => {
-    copyToClipboard(requestRemitLink);
-  };
-
-  // Share via native share API if available
-  const shareNative = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Remittance Request",
-          text: "Please use this link to process the remittance request:",
-          url: requestRemitLink,
-        });
-      } catch (err) {
-        console.log("Error sharing:", err);
-        setShowSharePopup(true);
-      }
-    } else {
-      setShowSharePopup(true);
+  const handleCopyTableRowLink = async (link, id) => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
     }
   };
 
-  // Helper functions
   const getCurrencyDisplayText = (currency) => {
     if (!currency) return "Unknown";
-
     if (typeof currency === "string") return currency;
-
     if (currency.code && currency.name) {
       return `${currency.code} - ${currency.name}`;
     }
-
     if (currency.code) return currency.code;
     if (currency.currency) return currency.currency;
-
     if (typeof currency === "object") {
       const stringProps = Object.values(currency).filter(
         (val) => typeof val === "string"
       );
       return stringProps[0] || "Unknown Currency";
     }
-
     return String(currency);
   };
 
   const getCurrencyValue = (currency) => {
     if (!currency) return "";
-
     if (typeof currency === "string") return currency;
     if (currency.code) return currency.code;
     if (currency.currency) return currency.currency;
-
     if (typeof currency === "object") {
       const stringProps = Object.values(currency).filter(
         (val) => typeof val === "string"
       );
       return stringProps[0] || "";
     }
-
     return String(currency);
   };
 
   const getBankDisplayText = (bank) => {
     if (!bank) return "Unknown Bank";
-
     const bankName = bank.bank_name || bank.name || "Unknown Bank";
     const accountNo = bank.bank_acc_no || bank.account_number;
-
     if (accountNo) {
       return `${bankName} - ****${accountNo.slice(-4)}`;
     }
-
     return bankName;
   };
 
@@ -1368,9 +884,6 @@ Generated on ${currentDate}
 
     setLoading(true);
     setMessage({ type: "", text: "" });
-    setRequestRemitLink(null);
-    setCopySuccess(false);
-    setShowSharePopup(false);
 
     try {
       const authtoken = getAuthToken();
@@ -1386,16 +899,9 @@ Generated on ${currentDate}
         currency: formData.currency,
         senders: formData.senders,
         author_source: "zap",
-        author_type: "beneficiary",
+        author_type: localStorage.getItem("login_user_type") || "beneficiary",
         author_id: localStorage.getItem("beneficiary_uuid"),
       };
-
-      console.log("Sending payload:", payload);
-      console.log("Sending payload with senders:", {
-        ...payload,
-        senders_count: payload.senders.length,
-        selected_senders: payload.senders,
-      });
 
       const response = await fetch(`${API_URL}/transactions/request-remit`, {
         method: "POST",
@@ -1407,34 +913,27 @@ Generated on ${currentDate}
       });
 
       const result = await response.json();
-      console.log("API Response:", result);
 
-      if (response.ok && result.status === "success") {
-        setMessage({
-          type: "success",
-          text: result.message || "Remittance request submitted successfully!",
+      if (
+        response.ok &&
+        (result.status === "success" ||
+          response.status === 200 ||
+          response.status === 201)
+      ) {
+        const generatedLink = result.data?.requestRemitLink || "";
+
+        // Reset inputs
+        setFormData((prev) => ({ ...prev, amount: "", senders: [] }));
+        setSelectedSenders([]);
+
+        // Trigger the link popup modal from BenefRequestRemit
+        setCreatedLinkModal({
+          isOpen: true,
+          link: generatedLink,
+          message: result.message || "Request Remit Processed successfully",
+          amount: payload.amount,
+          currency: payload.currency,
         });
-
-        // ✅ USE THE EXTERNAL URL DIRECTLY FROM THE API RESPONSE
-        const externalUrl = result.data?.requestRemitLink;
-        console.log("Using external payment URL:", externalUrl);
-
-        if (externalUrl) {
-          setRequestRemitLink(externalUrl);
-
-          // Also extract the requestRemitId for your internal use if needed
-          const urlParts = externalUrl.split("/");
-          const requestRemitId = urlParts[urlParts.length - 1];
-          console.log(
-            "Extracted requestRemitId for internal use:",
-            requestRemitId
-          );
-
-          // Store this for your RemittanceForm component if needed
-          localStorage.setItem("currentRequestRemitId", requestRemitId);
-        } else {
-          throw new Error("No requestRemitLink found in API response");
-        }
 
         // Refresh dashboard data
         fetchAllData();
@@ -1458,31 +957,6 @@ Generated on ${currentDate}
     }
   };
 
-  const handleSendAnother = () => {
-    setRequestRemitLink(null);
-    setCopySuccess(false);
-    setShowSharePopup(false);
-    setFormData((prev) => ({
-      ...prev,
-      amount: "",
-      beneficiary_bank_id:
-        beneficiaryData?.benef_banks?.[0]?.id?.toString() || "",
-      currency: beneficiaryData?.benef_banks?.[0]?.currency_code || "USD",
-    }));
-  };
-
-  // Update the email form when requestRemitLink changes
-  useEffect(() => {
-    if (requestRemitLink) {
-      const enhancedContent = generateEnhancedEmailContent();
-      setEmailForm((prev) => ({
-        ...prev,
-        message: enhancedContent,
-      }));
-    }
-  }, [requestRemitLink]);
-
-  // Fetch all data when component mounts
   useEffect(() => {
     let isMounted = true;
 
@@ -1497,11 +971,10 @@ Generated on ${currentDate}
     loadData();
 
     return () => {
-      isMounted = false; // Cleanup to prevent state updates after unmount
+      isMounted = false;
     };
   }, [urlBeneficiaryId, fetchAllData]);
 
-  // Check if user is authenticated
   useEffect(() => {
     const authtoken = getAuthToken();
     if (!authtoken) {
@@ -1510,31 +983,6 @@ Generated on ${currentDate}
         text: "Please log in to access this page.",
       });
     }
-  }, []);
-
-  useEffect(() => {
-    const detectUserEmail = () => {
-      // Try to get email from localStorage or sessionStorage
-      const userData =
-        localStorage.getItem("user") ||
-        sessionStorage.getItem("user") ||
-        localStorage.getItem("userData") ||
-        sessionStorage.getItem("userData");
-
-      if (userData) {
-        try {
-          const parsedUser = JSON.parse(userData);
-          if (parsedUser.email) {
-            setUserEmail(parsedUser.email);
-            return;
-          }
-        } catch (error) {
-          console.log("Could not parse user data");
-        }
-      }
-    };
-
-    detectUserEmail();
   }, []);
 
   return (
@@ -1556,7 +1004,6 @@ Generated on ${currentDate}
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto min-w-0 bg-gray-50">
-        {/* Mobile-only beneficiary code strip (sidebar is hidden on small screens) */}
         {beneficiaryId && (
           <div className="lg:hidden bg-white border-b border-gray-200 sticky top-0 z-20 px-4 py-3 flex items-center justify-between">
             <span className="text-xs text-gray-400">Beneficiary Code</span>
@@ -1597,10 +1044,9 @@ Generated on ${currentDate}
               </div>
             )}
 
-            {/* Stats Grid - Only show when beneficiary data is loaded */}
+            {/* Stats Grid */}
             {hasFetchedBeneficiary && (
               <div className="mb-8 sm:mb-10">
-                {/* Section Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 flex items-center flex-wrap gap-2">
@@ -1619,10 +1065,11 @@ Generated on ${currentDate}
                     className="flex items-center justify-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm w-full sm:w-auto flex-shrink-0"
                   >
                     <svg
-                      className={`w-4 h-4 ${statusLoading || transactionsLoading
-                        ? "animate-spin"
-                        : ""
-                        }`}
+                      className={`w-4 h-4 ${
+                        statusLoading || transactionsLoading
+                          ? "animate-spin"
+                          : ""
+                      }`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -1684,7 +1131,6 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Trend Indicator */}
                     <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                       <div className="flex items-center space-x-1 text-emerald-600 text-xs font-medium">
                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
@@ -1740,7 +1186,6 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Alert Badge for Pending Items */}
                     {stats.pendingRequests > 0 && (
                       <div className="flex items-center space-x-2 pt-3 border-t border-gray-100">
                         <div className="flex items-center space-x-1.5 bg-amber-50 text-amber-700 px-2 py-1 rounded-md text-xs font-medium border border-amber-200">
@@ -1798,30 +1243,35 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Success Rate */}
-                    {stats.totalRequests > 0 && (
+                    {transactionStats.totalTransactions > 0 && (
                       <div className="pt-3 border-t border-gray-100">
                         <div className="flex justify-between items-center mb-1.5">
                           <span className="text-gray-500 text-xs font-medium">
                             Success Rate
                           </span>
                           <span className="text-emerald-600 text-xs font-semibold">
-                            {Math.round(
-                              (stats.completedTransactions /
-                                stats.totalRequests) *
-                              100
+                            {Math.min(
+                              100,
+                              Math.round(
+                                (transactionStats.transactionsPaid /
+                                  transactionStats.totalTransactions) *
+                                  100
+                              )
                             )}
                             %
                           </span>
                         </div>
-                        <div className="w-full bg-gray-100 rounded-full h-1.5">
+                        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                           <div
                             className="bg-emerald-500 h-1.5 rounded-full transition-all duration-700 ease-out"
                             style={{
-                              width: `${Math.round(
-                                (stats.completedTransactions /
-                                  stats.totalRequests) *
-                                100
+                              width: `${Math.min(
+                                100,
+                                Math.round(
+                                  (transactionStats.transactionsPaid /
+                                    transactionStats.totalTransactions) *
+                                    100
+                                )
                               )}%`,
                             }}
                           ></div>
@@ -1874,7 +1324,6 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Growth Indicator */}
                     <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                       <div className="flex items-center space-x-1 text-emerald-600 text-xs font-medium">
                         <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></div>
@@ -1887,7 +1336,6 @@ Generated on ${currentDate}
                   </div>
                 </div>
 
-                {/* Loading State */}
                 {(statusLoading || transactionsLoading) && (
                   <div className="mt-4 flex items-center justify-center space-x-2 text-gray-400 text-sm">
                     <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-gray-200 border-t-gray-500"></div>
@@ -1901,7 +1349,6 @@ Generated on ${currentDate}
             {hasFetchedBeneficiary && (
               <div className="bg-white rounded-xl border border-gray-200 mb-8 sm:mb-10 overflow-hidden relative">
                 <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 lg:py-8">
-                  {/* Header */}
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                     <div className="flex items-center space-x-4">
                       <div className="w-11 h-11 bg-gray-50 rounded-lg flex items-center justify-center border border-gray-200 flex-shrink-0">
@@ -1932,14 +1379,14 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Refresh Button */}
                     <button
                       onClick={fetchAllData}
                       className="flex items-center justify-center space-x-2 px-3.5 py-2 bg-white hover:bg-gray-50 border border-gray-200 rounded-lg text-gray-700 font-medium transition-colors text-sm w-full sm:w-auto flex-shrink-0"
                     >
                       <svg
-                        className={`w-4 h-4 ${transactionsLoading ? "animate-spin" : ""
-                          }`}
+                        className={`w-4 h-4 ${
+                          transactionsLoading ? "animate-spin" : ""
+                        }`}
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1957,7 +1404,6 @@ Generated on ${currentDate}
 
                   {/* Stats Grid - 4 Columns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                    {/* Total Transactions Card */}
                     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                       <div className="flex items-center justify-between mb-4">
                         <div className="text-gray-700 text-sm font-semibold">
@@ -1999,7 +1445,6 @@ Generated on ${currentDate}
                         All-time volume
                       </div>
 
-                      {/* Progress Bar */}
                       <div>
                         <div className="flex justify-between text-xs text-gray-500 mb-1.5">
                           <span>Progress</span>
@@ -2007,7 +1452,7 @@ Generated on ${currentDate}
                             {Math.round(
                               (transactionStats.totalTransactions /
                                 (transactionStats.totalTransactions || 1)) *
-                              100
+                                100
                             )}
                             %
                           </span>
@@ -2019,7 +1464,7 @@ Generated on ${currentDate}
                               width: `${Math.round(
                                 (transactionStats.totalTransactions /
                                   (transactionStats.totalTransactions || 1)) *
-                                100
+                                  100
                               )}%`,
                             }}
                           ></div>
@@ -2027,7 +1472,6 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* In Progress Card */}
                     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                       <div className="flex items-center justify-between mb-4">
                         <div className="text-gray-700 text-sm font-semibold">
@@ -2069,7 +1513,6 @@ Generated on ${currentDate}
                         Processing & Pending
                       </div>
 
-                      {/* Detailed Status Breakdown */}
                       {transactions.length > 0 && (
                         <div className="space-y-2.5">
                           {(() => {
@@ -2118,7 +1561,6 @@ Generated on ${currentDate}
                         </div>
                       )}
 
-                      {/* Alert for Pending */}
                       {transactionStats.transactionsPending > 0 && (
                         <div className="mt-4 flex items-center space-x-2 px-3 py-2 bg-amber-50 rounded-md border border-amber-200">
                           <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
@@ -2130,7 +1572,6 @@ Generated on ${currentDate}
                       )}
                     </div>
 
-                    {/* Completed Transactions Card */}
                     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                       <div className="flex items-center justify-between mb-4">
                         <div className="text-gray-700 text-sm font-semibold">
@@ -2173,7 +1614,6 @@ Generated on ${currentDate}
                       </div>
                     </div>
 
-                    {/* Failed Transactions Card */}
                     <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
                       <div className="flex items-center justify-between mb-4">
                         <div className="text-gray-700 text-sm font-semibold">
@@ -2215,7 +1655,6 @@ Generated on ${currentDate}
                         Unsuccessful transactions
                       </div>
 
-                      {/* Alert for Failed Transactions */}
                       {(transactionStats.transactionsFailed || 0) > 0 && (
                         <div className="mt-4 flex items-center space-x-2 px-3 py-2 bg-red-50 rounded-md border border-red-200">
                           <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
@@ -2228,7 +1667,6 @@ Generated on ${currentDate}
                     </div>
                   </div>
 
-                  {/* Status Legend */}
                   <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-500 text-sm">
                     <div className="flex items-center space-x-2">
                       <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>
@@ -2248,7 +1686,6 @@ Generated on ${currentDate}
                     </div>
                   </div>
 
-                  {/* Quick Actions Footer */}
                   <div className="mt-8 flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-gray-100">
                     <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-gray-500 text-sm">
                       <div className="flex items-center space-x-2">
@@ -2272,7 +1709,6 @@ Generated on ${currentDate}
                   </div>
                 </div>
 
-                {/* Loading Overlay */}
                 {transactionsLoading && (
                   <div className="absolute inset-0 bg-white/80 rounded-xl flex items-center justify-center">
                     <div className="text-center">
@@ -2299,26 +1735,26 @@ Generated on ${currentDate}
                     </p>
                   </div>
                   <div className="p-4 sm:p-5 lg:p-6">
-                    {/* Status Message */}
                     {message.text && (
                       <div
-                        className={`rounded-lg p-3.5 mb-5 ${message.type === "error"
-                          ? "bg-red-50 border border-red-200"
-                          : "bg-emerald-50 border border-emerald-200"
-                          }`}
+                        className={`rounded-lg p-3.5 mb-5 ${
+                          message.type === "error"
+                            ? "bg-red-50 border border-red-200"
+                            : "bg-emerald-50 border border-emerald-200"
+                        }`}
                       >
                         <div
-                          className={`text-sm font-medium ${message.type === "error"
-                            ? "text-red-700"
-                            : "text-emerald-700"
-                            }`}
+                          className={`text-sm font-medium ${
+                            message.type === "error"
+                              ? "text-red-700"
+                              : "text-emerald-700"
+                          }`}
                         >
                           {message.text}
                         </div>
                       </div>
                     )}
 
-                    {/* Reset Beneficiary Button */}
                     {hasFetchedBeneficiary && (
                       <div className="mb-5 p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <div className="flex items-center justify-between gap-3">
@@ -2387,10 +1823,11 @@ Generated on ${currentDate}
                             senders.map((sender) => (
                               <div
                                 key={sender.id}
-                                className={`flex items-center p-3 border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ${selectedSenders.includes(sender.id)
-                                  ? "bg-gray-50"
-                                  : "hover:bg-gray-50"
-                                  }`}
+                                className={`flex items-center p-3 border-b border-gray-100 last:border-b-0 cursor-pointer transition-colors ${
+                                  selectedSenders.includes(sender.id)
+                                    ? "bg-gray-50"
+                                    : "hover:bg-gray-50"
+                                }`}
                                 onClick={() => handleSenderSelection(sender.id)}
                               >
                                 <input
@@ -2441,7 +1878,6 @@ Generated on ${currentDate}
                       onSubmit={handleSubmit}
                       className="space-y-4 lg:space-y-5"
                     >
-                      {/* Bank Account Selection - Only show when beneficiary data is loaded */}
                       {hasFetchedBeneficiary && (
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -2451,10 +1887,11 @@ Generated on ${currentDate}
                             name="beneficiary_bank_id"
                             value={formData.beneficiary_bank_id}
                             onChange={handleChange}
-                            className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.beneficiary_bank_id
-                              ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                              : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                              } focus:outline-none transition-colors`}
+                            className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
+                              errors.beneficiary_bank_id
+                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                            } focus:outline-none transition-colors`}
                           >
                             <option value="">Select bank account</option>
                             {beneficiaryData?.benef_banks?.map((bank) => (
@@ -2482,7 +1919,6 @@ Generated on ${currentDate}
                         </div>
                       )}
 
-                      {/* Amount and Currency - Only show when beneficiary data is loaded */}
                       {hasFetchedBeneficiary && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4">
                           <div>
@@ -2496,10 +1932,11 @@ Generated on ${currentDate}
                               onChange={handleChange}
                               min="1"
                               step="0.01"
-                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.amount
-                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                                } focus:outline-none transition-colors`}
+                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
+                                errors.amount
+                                  ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                                  : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                              } focus:outline-none transition-colors`}
                               placeholder="0.00"
                             />
                             {errors.amount && (
@@ -2529,10 +1966,11 @@ Generated on ${currentDate}
                               value={formData.currency}
                               onChange={handleChange}
                               disabled={currenciesLoading}
-                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${errors.currency
-                                ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                                : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
-                                } focus:outline-none transition-colors disabled:bg-gray-50`}
+                              className={`block w-full px-3.5 py-2.5 rounded-lg border bg-white text-sm ${
+                                errors.currency
+                                  ? "border-red-300 focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                                  : "border-gray-200 focus:border-gray-900 focus:ring-1 focus:ring-gray-900"
+                              } focus:outline-none transition-colors disabled:bg-gray-50`}
                             >
                               <option value="">Select currency</option>
                               {currencies.map((currency, index) => (
@@ -2572,12 +2010,13 @@ Generated on ${currentDate}
                             !formData.beneficiary_bank_id ||
                             !getAuthToken()
                           }
-                          className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors ${loading ||
+                          className={`w-full py-3 px-6 rounded-lg font-medium text-white text-sm focus:outline-none transition-colors ${
+                            loading ||
                             !formData.beneficiary_bank_id ||
                             !getAuthToken()
-                            ? "bg-gray-300 cursor-not-allowed"
-                            : "bg-gray-900 hover:bg-gray-800"
-                            }`}
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : "bg-gray-900 hover:bg-gray-800"
+                          }`}
                         >
                           {loading ? (
                             <div className="flex items-center justify-center">
@@ -2626,169 +2065,11 @@ Generated on ${currentDate}
                         </button>
                       )}
                     </form>
-
-                    {/* Success Section with Enhanced Link Sharing */}
-                    {requestRemitLink && (
-                      <div className="mt-5 p-4 sm:p-5 bg-emerald-50 border border-emerald-200 rounded-xl">
-                        <div className="text-center">
-                          <div className="mx-auto h-11 w-11 bg-white rounded-full flex items-center justify-center mb-3 border border-emerald-200">
-                            <svg
-                              className="h-5 w-5 text-emerald-600"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          </div>
-                          <h4 className="text-base font-semibold text-emerald-900 mb-1.5">
-                            Transfer Initiated
-                          </h4>
-                          <p className="text-emerald-700 mb-4 text-sm">
-                            Your remittance request has been queued for
-                            processing.
-                          </p>
-
-                          {/* Enhanced Link Section with Copy and Share */}
-                          <div className="bg-white rounded-lg p-4 mb-4 border border-emerald-200">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                Tracking Link
-                              </p>
-                              <div className="flex items-center justify-center space-x-3">
-                                {/* Copy Button */}
-                                <button
-                                  onClick={handleCopyLink}
-                                  className="flex items-center text-xs text-gray-700 hover:text-gray-900 font-medium transition-colors"
-                                  title="Copy to clipboard"
-                                >
-                                  {copySuccess ? (
-                                    <>
-                                      <svg
-                                        className="w-3.5 h-3.5 mr-1 text-emerald-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M5 13l4 4L19 7"
-                                        />
-                                      </svg>
-                                      <span className="text-emerald-600">
-                                        Copied!
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <svg
-                                        className="w-3.5 h-3.5 mr-1"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                      >
-                                        <path
-                                          strokeLinecap="round"
-                                          strokeLinejoin="round"
-                                          strokeWidth={2}
-                                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                                        />
-                                      </svg>
-                                      Copy
-                                    </>
-                                  )}
-                                </button>
-
-                                {/* Share Button */}
-                                <button
-                                  onClick={() => setShowSharePopup(true)}
-                                  className="flex items-center text-xs text-gray-700 hover:text-gray-900 font-medium transition-colors"
-                                  title="Share via email"
-                                >
-                                  <svg
-                                    className="w-3.5 h-3.5 mr-1"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2}
-                                      d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                                    />
-                                  </svg>
-                                  Email
-                                </button>
-                              </div>
-                            </div>
-                            <a
-                              href={requestRemitLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-gray-700 hover:text-gray-900 break-all text-xs font-mono font-medium underline block text-left"
-                            >
-                              {requestRemitLink}
-                            </a>
-                          </div>
-
-                          <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                            <a
-                              href={requestRemitLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex-1 inline-flex justify-center items-center px-4 py-2.5 text-sm font-medium rounded-lg text-white bg-gray-900 hover:bg-gray-800 transition-colors"
-                            >
-                              <svg
-                                className="w-4 h-4 mr-2"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                />
-                              </svg>
-                              Open Link
-                            </a>
-                            <button
-                              onClick={handleSendAnother}
-                              className="flex-1 inline-flex justify-center items-center px-4 py-2.5 border border-gray-200 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-                            >
-                              <svg
-                                className="w-4 h-4 mr-2"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                />
-                              </svg>
-                              New Request
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Right Column - Status and Transactions - Only show when beneficiary data is loaded */}
+              {/* Right Column - Status and Transactions */}
               {hasFetchedBeneficiary && (
                 <div className="xl:col-span-2 space-y-6 lg:space-y-8">
                   {/* Request Status Section */}
@@ -2860,63 +2141,67 @@ Generated on ${currentDate}
                                   <p className="text-xs lg:text-sm text-gray-500">
                                     {request.created_at
                                       ? new Date(
-                                        request.created_at
-                                      ).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      })
+                                          request.created_at
+                                        ).toLocaleDateString("en-US", {
+                                          month: "short",
+                                          day: "numeric",
+                                          year: "numeric",
+                                        })
                                       : "N/A"}
                                   </p>
                                 </div>
                               </div>
+
                               {request.request_remit_link && (
-                                <div className="flex items-center space-x-3 sm:text-right flex-wrap gap-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {/* Copy Button (Icon style from BenefRequestRemit) */}
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      copyToClipboard(request.request_remit_link)
+                                      handleCopyTableRowLink(
+                                        request.request_remit_link,
+                                        request.id
+                                      )
                                     }
-                                    className="flex items-center text-xs text-gray-600 hover:text-gray-900 font-medium transition-colors"
-                                    title="Copy request link"
+                                    className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                                    title="Copy link"
                                   >
-                                    <svg
-                                      className="w-3.5 h-3.5 mr-1"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                                    {copiedId === request.id ? (
+                                      <FaCheck
+                                        className="text-emerald-600"
+                                        size={13}
                                       />
-                                    </svg>
-                                    Copy Link
+                                    ) : (
+                                      <FaCopy size={13} />
+                                    )}
                                   </button>
+
+                                  {/* Open Link Button */}
                                   <a
                                     href={request.request_remit_link}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center text-xs text-gray-600 hover:text-gray-900 font-medium transition-colors"
-                                    title="Open request link"
+                                    className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100 transition-colors"
+                                    title="Open link"
                                   >
-                                    <svg
-                                      className="w-3.5 h-3.5 mr-1"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      viewBox="0 0 24 24"
-                                    >
-                                      <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                                      />
-                                    </svg>
-                                    Open
+                                    <FaExternalLinkAlt size={13} />
                                   </a>
+
+                                  {/* Send in Gmail Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleSendViaGmail(
+                                        request.request_remit_link,
+                                        request.amount,
+                                        request.currency
+                                      )
+                                    }
+                                    className="p-2 rounded-lg bg-gray-50 border border-gray-200 text-red-500 hover:bg-red-50 transition-colors"
+                                    title="Send in Gmail"
+                                  >
+                                    <FaEnvelope size={13} />
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -2998,16 +2283,18 @@ Generated on ${currentDate}
                             >
                               <div className="flex items-center space-x-3.5 mb-2 sm:mb-0 min-w-0">
                                 <div
-                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border flex-shrink-0 ${transaction.direction === "Inbound"
-                                    ? "bg-emerald-50 border-emerald-200"
-                                    : "bg-gray-50 border-gray-200"
-                                    }`}
+                                  className={`w-9 h-9 rounded-lg flex items-center justify-center border flex-shrink-0 ${
+                                    transaction.direction === "Inbound"
+                                      ? "bg-emerald-50 border-emerald-200"
+                                      : "bg-gray-50 border-gray-200"
+                                  }`}
                                 >
                                   <svg
-                                    className={`w-4 h-4 ${transaction.direction === "Inbound"
-                                      ? "text-emerald-600"
-                                      : "text-gray-600"
-                                      }`}
+                                    className={`w-4 h-4 ${
+                                      transaction.direction === "Inbound"
+                                        ? "text-emerald-600"
+                                        : "text-gray-600"
+                                    }`}
                                     fill="none"
                                     stroke="currentColor"
                                     viewBox="0 0 24 24"
@@ -3049,12 +2336,12 @@ Generated on ${currentDate}
                                 <p className="text-xs text-gray-400 mt-1.5 font-medium">
                                   {transaction.created_at
                                     ? new Date(
-                                      transaction.created_at
-                                    ).toLocaleDateString("en-US", {
-                                      month: "short",
-                                      day: "numeric",
-                                      year: "numeric",
-                                    })
+                                        transaction.created_at
+                                      ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })
                                     : "N/A"}
                                 </p>
                                 {transaction.direction && (
@@ -3100,19 +2387,86 @@ Generated on ${currentDate}
         </div>
       </div>
 
+      {/* Remittance Link Ready Modal (Matching BenefRequestRemit) */}
+      {createdLinkModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-2xl max-w-md w-full p-6 text-center animate-in fade-in zoom-in duration-150">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center mb-4">
+              <FaCheckCircle size={28} />
+            </div>
 
-      {/* Share Popup */}
-      <SharePopup
-        isOpen={showSharePopup}
-        onClose={() => setShowSharePopup(false)}
-        requestRemitLink={requestRemitLink}
-        emailForm={emailForm}
-        onEmailFormChange={handleEmailFormChange}
-        onEmailSend={sendEmailDirectly}
-        onCopyLink={handleCopyLink}
-      />
+            <h3 className="text-lg font-semibold text-gray-900 mb-1">
+              Remittance Link Ready!
+            </h3>
+            <p className="text-sm text-gray-500 mb-5">
+              {createdLinkModal.message}
+            </p>
+
+            <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 mb-5 text-left">
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                Shareable Remittance Link
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={createdLinkModal.link}
+                  className="bg-transparent text-xs text-gray-700 font-mono w-full focus:outline-none select-all truncate"
+                />
+                <button
+                  onClick={handleCopyGeneratedLink}
+                  className="px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-700 text-xs font-medium flex items-center gap-1.5 transition-colors flex-shrink-0"
+                >
+                  {isCopied ? (
+                    <>
+                      <FaCheck className="text-emerald-600" size={11} />
+                      <span className="text-emerald-600">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaCopy size={11} />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() =>
+                  handleSendViaGmail(
+                    createdLinkModal.link,
+                    createdLinkModal.amount,
+                    createdLinkModal.currency
+                  )
+                }
+                className="w-full py-2.5 px-4 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-800 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+              >
+                <FaEnvelope className="text-red-500 text-sm" />
+                <span>Send in Gmail</span>
+              </button>
+
+              <button
+                onClick={() =>
+                  setCreatedLinkModal({
+                    isOpen: false,
+                    link: "",
+                    message: "",
+                    amount: "",
+                    currency: "",
+                  })
+                }
+                className="w-full py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default BenefHome;
+export default BenefHome; 

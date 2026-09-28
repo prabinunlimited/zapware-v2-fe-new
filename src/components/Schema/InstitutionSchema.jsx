@@ -201,209 +201,23 @@ const institutionSchema = (currentStep, options = {}) => {
 
   // Step-specific schemas
   const step1Schema = Yup.object().shape({
-    institution_account_type_id: Yup.number()
-      .required("Please select an Institution Account Type")
-      .nullable()
-      .typeError("Please select a valid Institution Account Type"),
-
-    institution_type_id: Yup.number()
-      .required("Please select an Institution Type")
-      .nullable()
-      .typeError("Please select a valid Institution Type"),
-
-    institution_name: Yup.string()
-      .required("Business name is required")
-      .min(2, "Business name must be at least 2 characters"),
-
-    registration_number: Yup.string()
-      .required("Registration number is required")
-      .min(3, "Registration number must be at least 3 characters"),
-
-    registered_address_street_country: Yup.string().required(
-      "Registered address country is required",
-    ),
-
-    registered_address_street_state: Yup.string().nullable(),
-
-    registered_address_street_city: Yup.string().required("City is required"),
-
-    // REMOVED character count validation from address fields
-    registered_address_street_1: Yup.string().required(
-      "Street address is required",
-    ),
-
-    registered_address_street_zip: Yup.string()
-      .required("ZIP/Postal code is required")
-      .matches(/^[A-Z0-9\s-]+$/, "Invalid ZIP/postal code format"),
-
-    date_incorporation: Yup.date()
-      .max(new Date(), "Date of incorporation cannot be in the future")
-      .required("Date of incorporation is required"),
-
-    registered_business_address_apartment_unit_no: Yup.string()
-      .required("Apartment/Unit number is required")
-      .min(1, "Please enter a valid apartment/unit number"),
-
-
-    industry_type: Yup.string()
-      .required("Industry type is required")
-      .test(
-        "industry-not-empty",
-        "Industry type is required",
-        (value) => value && value.toString().trim().length > 0,
-      ),
-
-    // country_of_registration: Yup.string().required(
-    //   "Country of registration is required",
-    // ),
-
-    // Conditional fields
-    ...(showEINField && {
-      ein: Yup.string()
-        .required("EIN is required for USD Named Accounts")
-        .test("ein-format", "EIN must be in format XX-XXXXXXX", (value) => {
-          if (!value) return false;
-          const cleanEIN = value.replace(/-/g, "");
-          return cleanEIN.length === 9 && /^\d+$/.test(cleanEIN);
-        }),
-    }),
-
-    // FIXED: NAICS Code validation for named accounts
-    ...(showNAICSField &&
-      isNamedAccount && {
-      naice_code: Yup.string().required(
-        "NAICS code is required for USD Named Accounts",
-      ),
-    }),
-
-    ...(showBusinessTypeField && {
-      business_type: Yup.string().required("Business type is required"),
-    }),
-
-    ...(showBusinessAliasField && {
-      business_alias: Yup.string()
-        .required("Business alias is required for named accounts")
-        .min(2, "Business alias must be at least 2 characters"),
-    }),
+    // No client-side required validation for step 1 — the API
+    // (/validate-institution-step and final submit) enforces this,
+    // and the * markers are driven purely by mandatoryFieldsMap in the component.
   });
 
   const step2Schema = Yup.object().shape({
-    first_name: requiredString.min(
-      2,
-      "First name must be at least 2 characters",
-    ),
-    last_name: requiredString.min(2, "Last name must be at least 2 characters"),
-    email: email,
-    password: password,
-    confirm_password: Yup.string()
-      .oneOf([Yup.ref("password"), null], "Passwords must match")
-      .required("Confirm password is required"),
-    resident_country: requiredString,
-    mobilenumber_countrycode: countryCode,
-    mobile_number: phoneNumber,
-    nationality: requiredString,
-    country: requiredString,
-    state: Yup.string().nullable(),
-    city: requiredString,
-    // REMOVED character count validation from address field
-    street_address_1: requiredString,
-    zip_code: requiredString.matches(
-      /^[A-Z0-9\s-]+$/,
-      "Invalid ZIP/postal code format",
-    ),
-    gender: requiredString,
-    dob: dateOfBirth,
-    designation: requiredString,
-    doc_type: requiredString,
-    doc_id: requiredString.min(2, "Document ID must be at least 2 characters"),
-    doc_country: requiredString,
-    id_issued_date: Yup.date()
-      .max(new Date(), "Issue date cannot be in the future")
-      .required("ID issue date is required"),
-    ssn: ssnValidation,
-
-    // FIXED: Terms and conditions validation - more flexible
-    terms_and_conditions: Yup.array()
-      .of(
-        Yup.object().shape({
-          id: Yup.string().required(),
-          accepted_at: Yup.string().required(),
-        }),
-      )
-      .test(
-        "terms-accepted",
-        "You must accept all Terms and Conditions to continue",
-        function (termsArray) {
-          // If there are no terms available, consider it valid
-          if (!termsArray || termsArray.length === 0) {
-            return true;
-          }
-
-          // Check if all available terms are accepted
-          // This allows for dynamic terms - user must accept all that are presented
-          const acceptedTermIds = termsArray.map((term) => term.id);
-          const allTermsAccepted = acceptedTermIds.length > 0;
-
-          if (!allTermsAccepted) {
-            return this.createError({
-              message: "You must accept all Terms and Conditions to continue",
-            });
-          }
-
-          return true;
-        },
-      )
-      .required("Terms and conditions acceptance is required"),
+    // No client-side required validation for step 2 — the API
+    // (/validate-institution-step) enforces this, and the * markers
+    // are driven purely by mandatoryFieldsMap in the component.
   });
 
   // FIXED: Step 3 Schema with proper conditional validation
-  const step3Schema = Yup.object()
-    .shape({
-      is_controller: requiredString.oneOf(
-        ["yes", "no"],
-        "Please select if you are the controller",
-      ),
-    })
-    .concat(
-      Yup.object().when("is_controller", {
-        is: "no",
-        then: Yup.object().shape({
-          controller_first_name: requiredString.min(
-            2,
-            "First name must be at least 2 characters",
-          ),
-          controller_last_name: requiredString.min(
-            2,
-            "Last name must be at least 2 characters",
-          ),
-          controller_email: email,
-          controller_password: password,
-          controller_confirm_password: Yup.string()
-            .oneOf(
-              [Yup.ref("controller_password"), null],
-              "Passwords must match",
-            )
-            .required("Confirm password is required"),
-          controller_resident_country: requiredString,
-          controller_mobilenumber_countrycode: countryCode,
-          controller_mobile_number: phoneNumber,
-          controller_nationality: requiredString,
-          controller_country: requiredString,
-          controller_state: Yup.string().nullable(),
-          controller_city: requiredString,
-          // REMOVED character count validation from controller address field
-          controller_street_address_1: requiredString,
-          controller_zip_code: requiredString.matches(
-            /^[A-Z0-9\s-]+$/,
-            "Invalid ZIP/postal code format",
-          ),
-          controller_gender: requiredString,
-          controller_dob: dateOfBirth,
-          controller_designation: requiredString,
-          controller_ssn: controllerSsnValidation,
-        }),
-      }),
-    );
+  const step3Schema = Yup.object().shape({
+    // No client-side required validation for step 3 — the API
+    // (/validate-institution-step) enforces this, and the * markers
+    // are driven purely by mandatoryFieldsMap in the component.
+  });
 
   const step4Schema = Yup.object().shape({
     // Completely empty - no validation for now

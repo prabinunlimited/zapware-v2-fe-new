@@ -13,6 +13,7 @@ const requestThrottle = new Map();
 const globalFetchState = new Map();
 
 const BYPASS_COORDINATION_ENDPOINTS = [
+  "/customers/sign-up-institution",
   "verify-passcode",
   "send-passcode",
   "generate-passcode",

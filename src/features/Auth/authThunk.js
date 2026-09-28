@@ -395,7 +395,26 @@ export const verifyPasscode = createAsyncThunk(
             isRemittanceOnlyCustomer: "Y",
             plaid_message: responseData.plaid_message || "Your KYC Verification is in Pending state. Please contact support team on suds@xchangely.com or call at +1 (408) 242-9705",
             customer_id: responseData.customer_id,
+            customerUuid: responseData.customerUuid || null,
+            customerSsn: responseData.customerSsn || null,
+            plaid_kyc_required: responseData.plaid_kyc_required || null,
+            plaidUrl: responseData.plaid_url || null,
             // ❌ NO token, NO requiresPlaidRedirect
+          };
+        }
+
+        // CASE 3a: Non-Remittance Customer, KYC pending but no Plaid action required - just show message
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y" &&
+          responseData.plaid_kyc_required === "N") {
+
+          return {
+            isAccountPending: true,
+            kyc_status: responseData.kyc_status,
+            isRemittanceOnlyCustomer: "N",
+            plaid_message: responseData.plaid_message,
+            customer_id: responseData.customer_id,
+            // ❌ NO token, NO redirect
           };
         }
 
@@ -462,6 +481,8 @@ export const verifyPasscode = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
+            hasSilaBankAccount: responseData.hasSilaBankAccount || null,
             message: "Login successful",
           };
         }
@@ -697,16 +718,36 @@ export const verifyOTP = createAsyncThunk(
 
         //  CASE 1: KYC Pending for Remittance Only Customer - Show message, DON'T login
         if (responseData.kyc_status === "0" &&
-          responseData.isRemittanceOnlyCustomer === "Y") {
+        responseData.isRemittanceOnlyCustomer === "Y") {
 
-          // Return ONLY the message, NO token, NO customer_id for authentication
+        // Return ONLY the message, NO token, NO customer_id for authentication
+        return {
+          kyc_status: "0",
+          isRemittanceOnlyCustomer: "Y",
+          plaid_message: responseData.plaid_message,
+          showKycMessage: true,
+          requiresRedirect: false,
+          customer_id: responseData.customer_id,
+          customerUuid: responseData.customerUuid || null,
+          customerSsn: responseData.customerSsn || null,
+          plaid_kyc_required: responseData.plaid_kyc_required || null,
+          plaidUrl: responseData.plaid_url || null,
+          // ❌ DO NOT include token here
+        };
+      }
+
+        // CASE 1b: Non-Remittance Customer, KYC pending but no Plaid action required - just show message
+        if (responseData.kyc_status === "0" &&
+          responseData.isRemittanceOnlyCustomer !== "Y" &&
+          responseData.plaid_kyc_required === "N") {
+
           return {
+            isAccountPending: true,
             kyc_status: "0",
-            isRemittanceOnlyCustomer: "Y",
+            isRemittanceOnlyCustomer: "N",
             plaid_message: responseData.plaid_message,
-            showKycMessage: true,
-            requiresRedirect: false,
-            // ❌ DO NOT include token or customer_id here
+            customer_id: responseData.customer_id,
+            // ❌ NO token, NO redirect
           };
         }
 
@@ -755,6 +796,8 @@ export const verifyOTP = createAsyncThunk(
             customerUuid: responseData.customerUuid || null,
             beneficaryLogin: responseData.beneficaryLogin || null,
             beneficaryId: responseData.beneficaryId || null,
+            applied_zai_account: responseData.applied_zai_account || null,
+            hasSilaBankAccount: responseData.hasSilaBankAccount || null,
             message: "Login successful",
           };
         }
@@ -792,7 +835,6 @@ export const verifyOTP = createAsyncThunk(
     }
   }
 );
-
 // ===================== SEND OTP =====================
 export const sendOtp = createAsyncThunk(
   "auth/sendOtp",
@@ -877,6 +919,72 @@ export const sendOtp = createAsyncThunk(
   }
 );
 
+// ===================== RESEND OTP LOGIN =====================
+export const resendOtpLogin = createAsyncThunk(
+  "auth/resendOtpLogin",
+  async ({ login_request_user_id, login_request_user_type }, { rejectWithValue }) => {
+    try {
+      const token = await getBearerToken();
+
+      const payload = {
+        login_request_user_id,
+        login_request_user_type,
+      };
+
+      const response = await api.post("/resend-otp-login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data?.status === "success") {
+        return response.data;
+      }
+
+      return rejectWithValue(response.data?.message || "Failed to resend OTP");
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(
+        error.response?.data?.message || errorMessage || "Failed to resend OTP"
+      );
+    }
+  }
+);
+
+// ===================== RESEND PASSCODE LOGIN =====================
+export const resendPasscodeLogin = createAsyncThunk(
+  "auth/resendPasscodeLogin",
+  async ({ login_request_user_id, login_request_user_type }, { rejectWithValue }) => {
+    try {
+      const token = await getBearerToken();
+
+      const payload = {
+        login_request_user_id,
+        login_request_user_type,
+      };
+
+      const response = await api.post("/resend-passcode-login", payload, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.data?.status === "success") {
+        return response.data;
+      }
+
+      return rejectWithValue(response.data?.message || "Failed to resend passcode");
+    } catch (error) {
+      const errorMessage = extractErrorMessage(error);
+      return rejectWithValue(
+        error.response?.data?.message || errorMessage || "Failed to resend passcode"
+      );
+    }
+  }
+);
+
 // ===================== RESEND REGISTRATION OTP =====================
 export const resendRegistrationOtp = createAsyncThunk(
   "auth/resendRegistrationOtp",
@@ -945,7 +1053,7 @@ export const resendRegistrationOtp = createAsyncThunk(
 export const validateOtp = createAsyncThunk(
   "auth/validateOtp",
   async (
-    { country_code, mobile_number, otp },
+    { country_code, mobile_number_country_code, mobile_number, otp },
     { dispatch, rejectWithValue }
   ) => {
     try {
@@ -953,16 +1061,15 @@ export const validateOtp = createAsyncThunk(
 
       const formattedOTP = Array.isArray(otp) ? otp.join("") : otp;
       const token = await getBearerToken();
-      const currentDateTimeLocal = new Date().toLocaleString();
 
-      // Use the FULL mobile number with country code
-      const full_mobile_number = `${country_code} ${mobile_number}`;
+      // Resolve country code from whichever property was passed
+      const finalCountryCode = mobile_number_country_code || country_code;
 
+      // Exact payload required by the endpoint
       const payload = {
-        sign_in_option: "mobile",
-        mobile_number: full_mobile_number,
+        mobile_number_country_code: finalCountryCode,
+        mobile_number: mobile_number,
         otp: formattedOTP,
-        currentDate: currentDateTimeLocal,
       };
 
       const response = await api.post("/validate-otp", payload, {
@@ -981,6 +1088,7 @@ export const validateOtp = createAsyncThunk(
           kyc_status: responseData.kyc_status,
           plaid_status: responseData.plaid_status,
           plaid_url: responseData.plaid_url,
+          plaid_kyc_required: responseData.plaid_kyc_required, // Ensure this passes through for your UI check
           token: responseData.token,
           customer_id: responseData.customer_id,
           is_whitelabelled_partner_customer:
@@ -994,8 +1102,8 @@ export const validateOtp = createAsyncThunk(
           sessionStorage.setItem(
             "pending_mobile_auth",
             JSON.stringify({
-              country_code: country_code,
-              mobile_number: full_mobile_number,
+              country_code: finalCountryCode,
+              mobile_number: `${finalCountryCode} ${mobile_number}`,
               customer_id: responseData.customer_id,
               timestamp: Date.now(),
             })
@@ -1318,6 +1426,8 @@ export const loginUser = createAsyncThunk(
           kyc_status,
           bank_approve_status,
           plaid_link_url,
+          plaid_kyc_required,
+          plaid_message,
           customerUuid,
           beneficaryLogin,
           beneficaryId,
@@ -1356,6 +1466,14 @@ export const loginUser = createAsyncThunk(
         }
 
         if (kyc_status === "0" || kyc_status === 0) {
+          if (plaid_kyc_required === "N") {
+            return {
+              isAccountPending: true,
+              plaid_message,
+              customer_id,
+            };
+          }
+
           if (!plaid_link_url) {
             throw new Error(
               "Bank verification required but link not available"
@@ -1498,6 +1616,7 @@ export const logoutUser = createAsyncThunk(
       localStorage.removeItem('authcustomer_id');
       localStorage.removeItem('currentCustomerId');
       localStorage.removeItem('bearertoken');
+      localStorage.removeItem('hasSilaBankAccount');
 
       dispatch({ type: "auth/clearAuthState" });
       return true;

@@ -179,7 +179,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       let customerUuid = state.auth?.user?.uuid || localStorage.getItem("userUuid") || null;
 
       if (!customerUuid) {
-        customerUuid = localStorage.getItem("customerUuid") || null;
+        customerUuid = localStorage.getItem("customer_uuid") || null;
       }
 
       if (!customerUuid) {
@@ -193,7 +193,7 @@ export const searchBeneficiaryByPhone = createAsyncThunk(
       }
 
       const payload = {
-        beneficiary_type: beneficiaryType || "individual",
+        beneficiary_type: beneficiaryType,
         mobile_number_country_code: cleanedCountryCode,
         mobile_number: phoneNumber,
         customer_uuid: customerUuid
@@ -726,11 +726,11 @@ export const fetchBeneficiaryByCode = createAsyncThunk(
 
 export const fetchBeneficiaryBanks = createAsyncThunk(
   "beneficiaries/fetchBeneficiaryBanks",
-  async (beneficiaryId, { rejectWithValue }) => {
+  async ({ customerId, beneficiaryId }, { rejectWithValue }) => {
     try {
       const authtoken = localStorage.getItem("authtoken");
       const response = await fetch(
-        `${API_URL}/beneficiaries/benef-all-bank/${beneficiaryId}`,
+        `${API_URL}/beneficiaries/benef-all-banks/${customerId}/${beneficiaryId}`,
         {
           headers: {
             "Content-Type": "application/json",
@@ -744,7 +744,7 @@ export const fetchBeneficiaryBanks = createAsyncThunk(
       }
 
       const result = await response.json();
-      return result.bank_accounts || [];
+      return result.bank_accounts || result.data || [];
     } catch (error) {
       return rejectWithValue(error.message);
     }

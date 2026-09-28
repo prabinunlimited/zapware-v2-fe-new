@@ -25,16 +25,20 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
   const error = useSelector((state) => state.beneficiaries.error);
 
   useEffect(() => {
-    if (beneficiaryId) {
+    const activeCustomerId =
+      customerId ||
+      localStorage.getItem("authcustomer_id");
+
+    if (beneficiaryId && activeCustomerId) {
       dispatch(clearError());
-      dispatch(fetchBeneficiaryBanks(beneficiaryId));
+      dispatch(fetchBeneficiaryBanks({ customerId: activeCustomerId, beneficiaryId }));
     }
 
     return () => {
       dispatch(clearBeneficiaryBanks());
       dispatch(clearError());
     };
-  }, [beneficiaryId, dispatch]);
+  }, [beneficiaryId, customerId, dispatch]);
 
   const handleEditSpecificBank = (bankId) => {
     const currentCustomerId = customerId || localStorage.getItem("currentCustomerId");
@@ -80,19 +84,22 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
     setBankToDelete(bankId);
     setShowDeleteModal(true);
   };
-
   const confirmDelete = async () => {
     if (!bankToDelete) return;
+
+    const activeCustomerId =
+      customerId ||
+      localStorage.getItem("authcustomer_id");
 
     setIsDeleting(true);
     try {
       await dispatch(deleteBeneficiaryBank({
         beneficiaryId: beneficiaryId,
         bankId: bankToDelete,
-        customerId: customerId
+        customerId: activeCustomerId
       })).unwrap();
 
-      dispatch(fetchBeneficiaryBanks(beneficiaryId));
+      dispatch(fetchBeneficiaryBanks({ customerId: activeCustomerId, beneficiaryId }));
       toast.success("Bank account deleted successfully!");
     } catch (error) {
       console.error("Failed to delete bank account:", error);
@@ -103,7 +110,6 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
       setBankToDelete(null);
     }
   };
-
   const cancelDelete = () => {
     setShowDeleteModal(false);
     setBankToDelete(null);
@@ -131,7 +137,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
           <span className="text-xs sm:text-sm text-red-500">This action cannot be undone.</span>
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        <div className="flex flex-col-reverse sm:flex-row justify-center items-center gap-3">
           <button
             onClick={cancelDelete}
             disabled={isDeleting}
@@ -521,7 +527,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                       </div>
 
                       <div className="mt-4 pt-4 border-t border-gray-200">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                           <div>
                             <label className="text-gray-500">Bank UUID:</label>
                             <p className="text-gray-700 font-mono truncate">
@@ -534,7 +540,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                               {bank.benef_uuid}
                             </p>
                           </div>
-                        </div>
+                        </div> */}
 
                         <div className="flex flex-col sm:flex-row gap-2 mt-3 justify-end">
                           {/* Delete Button - Hidden if only one bank account */}

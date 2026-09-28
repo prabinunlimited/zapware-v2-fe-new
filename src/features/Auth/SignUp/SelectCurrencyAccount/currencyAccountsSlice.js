@@ -624,6 +624,13 @@ const currencyAccountsSlice = createSlice({
       })
       .addCase(fetchAccountOptions.fulfilled, (state, action) => {
         state.loading = false;
+        
+        // Safety check - if payload is null or missing, don't proceed
+        if (!action.payload) {
+          console.warn("⚠️ No payload received, skipping state update");
+          return;
+        }
+        
         const {
           accountOptionsData,
           termsData,
@@ -632,105 +639,67 @@ const currencyAccountsSlice = createSlice({
           isPartnerFlow,
           partnerId,
         } = action.payload;
-
-        console.log("✅ fetchAccountOptions successful:", {
-          isPartnerFlow,
-          partnerId,
-          accountType,
-          countryId,
-          hasTermsData: !!termsData,
-        });
-
+      
+        //  If termsData is null, set empty state and return
+        if (!termsData) {
+          console.warn("⚠️ termsData is null, setting empty state");
+          state.accountOptions = [];
+          state.namedAccounts = [];
+          state.pooledAccounts = [];
+          state.filteredNamedAccounts = [];
+          state.filteredPooledAccounts = [];
+          state.ucaDescription = "Select your currency accounts to get started";
+          state.loading = false;
+          return;
+        }
+      
         const descriptionKey =
           accountType === "individual"
             ? "individual_description"
             : "institution_description";
         state.ucaDescription =
-          accountOptionsData[descriptionKey] ||
-          accountOptionsData.description ||
-          (isPartnerFlow
-            ? `Select your currency accounts through our partner program`
-            : "Select your preferred currency accounts to get started");
-
+          accountOptionsData?.[descriptionKey] ||
+          accountOptionsData?.description ||
+          "Select your currency accounts to get started";
+      
+        // 1. Extract accounts from whatever property the API sends
         let accountsData = [];
-
-        if (isPartnerFlow) {
-          console.log("🔍 Processing partner response format:", termsData);
-
-          // Extract data from partner API response
-          if (termsData && termsData.data && Array.isArray(termsData.data)) {
-            accountsData = termsData.data;
-            console.log("✅ Extracted accounts from termsData.data:", accountsData.length);
-          } else if (Array.isArray(termsData)) {
-            accountsData = termsData;
-            console.log("⚠️ Using termsData directly as array:", accountsData.length);
-          } else if (termsData && termsData.currencies && Array.isArray(termsData.currencies)) {
-            accountsData = termsData.currencies;
-          } else if (termsData && termsData.accounts && Array.isArray(termsData.accounts)) {
-            accountsData = termsData.accounts;
-          }
-
-          accountsData = accountsData.map((account) => ({
-            ...account,
-            is_partner_account: true,
-            partner_id: partnerId,
-          }));
-        } else {
-          // Standard flow
-          if (Array.isArray(termsData)) {
-            accountsData = termsData;
-          } else if (termsData && termsData.data && Array.isArray(termsData.data)) {
-            accountsData = termsData.data;
-          }
+        if (termsData?.data && Array.isArray(termsData.data)) {
+          accountsData = termsData.data;
+        } else if (Array.isArray(termsData)) {
+          accountsData = termsData;
+        } else if (termsData?.currencies && Array.isArray(termsData.currencies)) {
+          accountsData = termsData.currencies;
+        } else if (termsData?.accounts && Array.isArray(termsData.accounts)) {
+          accountsData = termsData.accounts;
         }
-
-        console.log("📊 Processed accounts data:", {
-          totalAccounts: accountsData.length,
-          sampleAccount: accountsData[0],
+      
+        // 2. Normalize so both 'named'/'pooled' and '1'/'0' match properly
+        const named = accountsData.filter((acc) => {
+          const type = String(acc.account_type || acc.accountType || "").toLowerCase().trim();
+          return type === "named" || type === "1";
         });
-
-        // Separate accounts by type
-        const named = accountsData.filter(
-          (account) =>
-            account.accountType === "named" ||
-            account.account_type === "named" ||
-            account.type === "named" ||
-            (isPartnerFlow && account.account_type === "1"),
-        );
-
-        const pooled = accountsData.filter(
-          (account) =>
-            account.accountType === "pooled" ||
-            account.account_type === "pooled" ||
-            account.type === "pooled" ||
-            (isPartnerFlow && account.account_type === "0"),
-        );
-
+      
+        const pooled = accountsData.filter((acc) => {
+          const type = String(acc.account_type || acc.accountType || "").toLowerCase().trim();
+          return type === "pooled" || type === "0";
+        });
+      
+        // 3. Save raw data and filtered lists
         state.accountOptions = accountsData;
         state.namedAccounts = named;
         state.pooledAccounts = pooled;
-        state.isPartnerFlow = isPartnerFlow;
-        state.partnerId = partnerId;
-
-        state.filteredNamedAccounts = filterAccountsByCurrency(
-          named,
-          state.activeTab,
-        );
-        state.filteredPooledAccounts = filterAccountsByCurrency(
-          pooled,
-          state.activeTab,
-        );
-
-        // Set terms text
-        if (termsData && termsData.termsText) {
+        state.isPartnerFlow = isPartnerFlow || false;
+        state.partnerId = partnerId || null;
+      
+        state.filteredNamedAccounts = filterAccountsByCurrency(named, state.activeTab);
+        state.filteredPooledAccounts = filterAccountsByCurrency(pooled, state.activeTab);
+      
+        // 4. Terms text setup
+        if (termsData?.termsText) {
           state.termsText = "I agree to " + termsData.termsText;
-        } else if (termsData && termsData.terms_text) {
+        } else if (termsData?.terms_text) {
           state.termsText = "I agree to " + termsData.terms_text;
-        } else if (isPartnerFlow) {
-          const partnerName =
-            localStorage.getItem("whitelabelled_customer_partnername") ||
-            "Partner";
-          state.termsText = `I agree to ${partnerName} Terms and Conditions`;
         } else {
           state.termsText = "Please confirm that you agree on the Charges and Fees";
         }

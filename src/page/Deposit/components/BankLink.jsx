@@ -588,7 +588,7 @@ const BankLink = () => {
   // Fetch bank accounts on component mount
   useEffect(() => {
     if (customerId) {
-      dispatch(fetchBankAccounts(customerId));
+      dispatch(fetchBankAccounts({ customerId }));
     }
   }, [customerId, dispatch]);
 
@@ -602,7 +602,7 @@ const BankLink = () => {
   // Event handlers - ALL DEFINED BEFORE EMPTY STATE
   const handleRefresh = useCallback(() => {
     if (customerId && !isRefreshing) {
-      dispatch(fetchBankAccounts(customerId));
+      dispatch(fetchBankAccounts({ customerId, forceRefresh: true }));
     }
   }, [customerId, isRefreshing, dispatch]);
 

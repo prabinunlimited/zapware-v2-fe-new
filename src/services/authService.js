@@ -543,13 +543,13 @@ export const debouncedApiCall = async (cacheKey, apiCall, ttl = 60000) => {
 // ===================== PARTNER LOGIN & TOKEN MANAGEMENT =====================
 let tokenRefreshPromise = null;
 
-export const partnerLogin = async () => {
+export const partnerLogin = async (forceApiCall = false) => {
   try {
     console.log("🔍 Starting partner login...");
 
     // First check if we have a valid token using our service
     const existingToken = tokenService.getToken();
-    if (existingToken) {
+    if (existingToken && !forceApiCall) {
       const validation = tokenService.safeValidateToken(existingToken);
 
       if (validation.isValid && !validation.isExpired) {
@@ -943,6 +943,11 @@ export const getPartnerConfig = async (partnerId) => {
   );
 };
 
+export const getFrontendPopup = async (partnerId) => {
+  return api.get(`/frontend-popup/${partnerId}`);
+};
+
+
 export const sendOtp = async (mobileNumber) => {
   return api.post("/send-otp", {
     mobile_number: mobileNumber,
@@ -1211,6 +1216,7 @@ export default {
   getLogoutTime,
   fetchAndStoreLogoutTime,
   getPartnerConfig,
+  getFrontendPopup,
 
   // User Profile & Modules
   fetchUserProfile,

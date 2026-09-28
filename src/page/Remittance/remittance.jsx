@@ -57,6 +57,8 @@ import {
   fetchExchangeRate,
   fetchBankAccounts,
   fetchPayoutCurrencies,
+  fetchRemittanceCurrencies,
+  fetchManualRemittanceAccountDetails,
   submitTransaction,
   fetchManualAccountDetails,
   setExchangeRateData,
@@ -65,6 +67,7 @@ import {
 } from "./slices/remittanceSlice";
 
 import { fetchAllStaticData } from "./slices/staticDataSlice";
+import { fetchUserProfile } from "../../components/Dashboard/Header/headerSlice"
 
 // Import beneficiary actions
 import {
@@ -107,6 +110,9 @@ const Remittance = () => {
   const location = useLocation();
   const { customerId } = useParams();
 
+  const isRemittanceOnlyCustomer =
+    localStorage.getItem("isRemittanceOnlyCustomer") === "Y";
+
   // Select state from Redux store
   const {
     step,
@@ -132,6 +138,10 @@ const Remittance = () => {
     (state) => state.remittanceStatic,
   );
 
+  const remittanceCurrenciesError = useSelector(
+    (state) => state.remittance.currencies.remittanceCurrenciesError,
+  );
+
   const silaBankAccounts = useSelector(selectUSDBankAccounts);
   const hasSilaAccounts = useSelector(selectHasSilaAccounts);
   const silaAccountsLoading = useSelector(selectUSDAccountsLoading);
@@ -143,6 +153,8 @@ const Remittance = () => {
 
   // Local state for amount validation
   const [amountError, setAmountError] = useState(null);
+  const [exchangeRateError, setExchangeRateError] = useState(null);
+  const [exchangeRateLoading, setExchangeRateLoading] = useState(false);
 
   // Use local state if available, otherwise use Redux state
   const selectedSilaBankAccount = localSelectedBankAccount || reduxSelectedSilaBankAccount;
@@ -166,8 +178,10 @@ const Remittance = () => {
   const [activeCard, setActiveCard] = useState(null);
   const [pendingNewBeneficiaryId, setPendingNewBeneficiaryId] = useState(null);
 
-
   const [showBankLinkReminder, setShowBankLinkReminder] = useState(() => {
+    const hasSilaBankAccount = localStorage.getItem('hasSilaBankAccount') === 'Y';
+    if (!hasSilaBankAccount) return false;
+
     // Check if user has already seen the reminder
     const hasSeenBankReminder = localStorage.getItem('has_seen_bank_reminder');
     return !hasSeenBankReminder; // Show only if not seen before
@@ -233,6 +247,15 @@ const Remittance = () => {
     [],
   );
 
+  const availablePaymentOptions = useMemo(() => {
+    if (!isRemittanceOnlyCustomer) return paymentOptions;
+
+    const bankEnabled = formData.sendCurrency?.bank_enabled !== false;
+    return bankEnabled
+      ? paymentOptions
+      : paymentOptions.filter((option) => option.value !== "bank");
+  }, [paymentOptions, isRemittanceOnlyCustomer, formData.sendCurrency?.bank_enabled]);
+
   const purposeOptions = useMemo(
     () =>
       Array.isArray(purposes)
@@ -270,18 +293,26 @@ const Remittance = () => {
   );
 
   // Memoized currency options
-  const sendCurrencyOptions = useMemo(
-    () =>
-      (bankAccounts || []).map((account) => ({
-        value: account.currency_code,
-        label: account.currency_code,
-        fullLabel: `${account.currency_code} - ${account.bank_name || "Account"}`,
-        bank_id: account.id,
-        icon: account.icon,
-        balance: account.balance,
-      })),
-    [bankAccounts],
-  );
+  const sendCurrencyOptions = useMemo(() => {
+    if (isRemittanceOnlyCustomer) {
+      return (currencies?.remittanceCurrencies || []).map((currency) => ({
+        value: currency.currency_code,
+        label: currency.currency_code,
+        fullLabel: currency.currency_code,
+        currency_id: currency.currency_id,
+        bank_enabled: currency.bank_enabled,
+      }));
+    }
+
+    return (bankAccounts || []).map((account) => ({
+      value: account.currency_code,
+      label: account.currency_code,
+      fullLabel: `${account.currency_code} - ${account.bank_name || "Account"}`,
+      bank_id: account.id,
+      icon: account.icon,
+      balance: account.balance,
+    }));
+  }, [bankAccounts, currencies?.remittanceCurrencies, isRemittanceOnlyCustomer]);
 
   // FIXED: receiveCurrencyOptions - Only shows currencies from the API endpoint
   const receiveCurrencyOptions = useMemo(() => {
@@ -426,8 +457,8 @@ const Remittance = () => {
     setShowBankLinkReminder(false);
   }, []);
 
-  const totalToPay = parseFloat(formData.sendAmount || 0);
   const fee = parseFloat(exchangeRateData?.fee || exchangeRateData?.payoutCharge || 0);
+  const totalToPay = parseFloat(formData.sendAmount || 0) + fee;
 
   // ALL useEffects must be at top level
   useEffect(() => {
@@ -478,11 +509,21 @@ const Remittance = () => {
           console.log("🔍 Initializing with customerId:", customerId);
           console.log("🔍 partner_id from localStorage:", localStorage.getItem("partner_id"));
 
-          await Promise.all([
+          const initPromises = [
             dispatch(fetchBankAccounts(customerId)),
             dispatch(fetchPayoutCurrencies()),
             dispatch(fetchAllStaticData()),
-          ]);
+          ];
+
+          if (isRemittanceOnlyCustomer) {
+            const bearertoken = localStorage.getItem("bearertoken");
+            await dispatch(
+              fetchUserProfile({ customerId, bearertoken }),
+            ).unwrap();
+            initPromises.push(dispatch(fetchRemittanceCurrencies()));
+          }
+
+          await Promise.all(initPromises);
 
           setTimeout(() => {
             setIsInitializing(false);
@@ -590,6 +631,7 @@ const Remittance = () => {
       const cachedData = exchangeRateCache.current[cacheKey];
       if (cachedData && now - cachedData.timestamp < 45000) {
         if (isMounted) {
+          setExchangeRateLoading(false);
           dispatch({
             type: "remittance/setExchangeRateData",
             payload: cachedData.data,
@@ -612,6 +654,10 @@ const Remittance = () => {
       isRequestInProgress.current = true;
       lastApiCallTime.current = now;
 
+      if (isMounted) {
+        setExchangeRateLoading(true);
+      }
+
       const payload = {
         fromCurrency: sendCurrencyValue,
         toCurrency: receiveCurrencyValue,
@@ -622,13 +668,29 @@ const Remittance = () => {
 
       try {
         const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+
+        if (response?.status === "Error" || response?.status === "error") {
+          if (isMounted) {
+            setExchangeRateError(response.message || "Exchange rate unavailable");
+            dispatch(setExchangeRateData(null));
+          }
+          return;
+        }
+
         if (isMounted && response) {
           isManualUpdate.current = true;
 
           const fxRate =
             response.fxRate ||
-            response.converted_value / amountForCalculation ||
-            115;
+            response.converted_value / amountForCalculation;
+
+          if (!fxRate) {
+            setExchangeRateError("Exchange rate unavailable");
+            dispatch(setExchangeRateData(null));
+            return;
+          }
+
+          setExchangeRateError(null);
 
           const exchangeData = {
             ...response,
@@ -674,7 +736,16 @@ const Remittance = () => {
         }
       } catch (error) {
         console.error("Exchange rate fetch error:", error);
+        if (isMounted) {
+          const errMsg =
+            typeof error === "string"
+              ? error
+              : error?.message || error?.data?.message || "Exchange rate unavailable";
+          setExchangeRateError(errMsg);
+          dispatch(setExchangeRateData(null));
+        }
       } finally {
+        setExchangeRateLoading(false);
         if (isMounted) {
           setTimeout(() => {
             isManualUpdate.current = false;
@@ -711,37 +782,37 @@ const Remittance = () => {
     isInitializing,
   ]);
 
-  useEffect(() => {
-    if (!initialLoading && !loading) {
-      if (
-        formData.sendCurrency?.value &&
-        formData.receiveCurrency?.value &&
-        !exchangeRateData?.fxRate &&
-        !isRequestInProgress.current &&
-        !isTyping.current
-      ) {
-        const timer = setTimeout(() => {
-          const cacheKey = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value
-            }-${parseFloat(formData.sendAmount) || 5}`;
+  // useEffect(() => {
+  //   if (!initialLoading && !loading) {
+  //     if (
+  //       formData.sendCurrency?.value &&
+  //       formData.receiveCurrency?.value &&
+  //       !exchangeRateData?.fxRate &&
+  //       !isRequestInProgress.current &&
+  //       !isTyping.current
+  //     ) {
+  //       const timer = setTimeout(() => {
+  //         const cacheKey = `${formData.sendCurrency?.value}-${formData.receiveCurrency?.value
+  //           }-${parseFloat(formData.sendAmount) || 5}`;
 
-          if (exchangeRateCache.current[cacheKey]) {
-            delete exchangeRateCache.current[cacheKey];
-          }
+  //         if (exchangeRateCache.current[cacheKey]) {
+  //           delete exchangeRateCache.current[cacheKey];
+  //         }
 
-          fetchExchangeRateManual();
-        }, 500);
+  //         fetchExchangeRateManual();
+  //       }, 500);
 
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [
-    initialLoading,
-    loading,
-    formData.sendCurrency?.value,
-    formData.receiveCurrency?.value,
-    exchangeRateData?.fxRate,
-    formData.sendAmount,
-  ]);
+  //       return () => clearTimeout(timer);
+  //     }
+  //   }
+  // }, [
+  //   initialLoading,
+  //   loading,
+  //   formData.sendCurrency?.value,
+  //   formData.receiveCurrency?.value,
+  //   exchangeRateData?.fxRate,
+  //   formData.sendAmount,
+  // ]);
 
   useEffect(() => {
     if (
@@ -869,26 +940,39 @@ const Remittance = () => {
     let isMounted = true;
     let fetchTimer;
 
-    const fetchDetails = async () => {
-      if (
-        formData.paymentMethod === "manual" &&
-        formData.sendCurrency?.bank_id &&
-        formData.sendCurrency?.value
-      ) {
-        if (isMounted) {
-          setManualDetailsLoading(true);
-          setManualAccountError(null);
-        }
+    const hasIdentifier = isRemittanceOnlyCustomer
+      ? formData.sendCurrency?.currency_id
+      : formData.sendCurrency?.bank_id;
 
+    const shouldFetch =
+      formData.paymentMethod === "manual" &&
+      hasIdentifier &&
+      formData.sendCurrency?.value;
+
+    if (shouldFetch && isMounted) {
+      setManualDetailsLoading(true);
+      setManualAccountError(null);
+    } else if (isMounted) {
+      setManualAccountError(null);
+    }
+
+    const fetchDetails = async () => {
+      if (shouldFetch) {
         try {
-          const result = await dispatch(
-            fetchManualAccountDetails({
-              bankId: formData.sendCurrency.bank_id,
-              currencyCode: formData.sendCurrency.value,
-              amount: formData.sendAmount || "5",
-              customerId: parseInt(customerId),
-            }),
-          ).unwrap();
+          const result = isRemittanceOnlyCustomer
+            ? await dispatch(
+              fetchManualRemittanceAccountDetails(
+                formData.sendCurrency.currency_id,
+              ),
+            ).unwrap()
+            : await dispatch(
+              fetchManualAccountDetails({
+                bankId: formData.sendCurrency.bank_id,
+                currencyCode: formData.sendCurrency.value,
+                amount: formData.sendAmount || "5",
+                customerId: parseInt(customerId),
+              }),
+            ).unwrap();
 
           if (isMounted) {
             if (
@@ -950,9 +1034,11 @@ const Remittance = () => {
   }, [
     formData.paymentMethod,
     formData.sendCurrency?.bank_id,
+    formData.sendCurrency?.currency_id,
     formData.sendCurrency?.value,
     formData.sendAmount,
     customerId,
+    isRemittanceOnlyCustomer,
     dispatch,
   ]);
 
@@ -1041,6 +1127,8 @@ const Remittance = () => {
       }-${parseFloat(formData.sendAmount) || 5}`;
     delete exchangeRateCache.current[cacheKey];
 
+    setExchangeRateLoading(true);
+
     try {
       const payload = {
         fromCurrency: formData.sendCurrency.value,
@@ -1051,11 +1139,25 @@ const Remittance = () => {
       };
 
       const response = await dispatch(fetchExchangeRate(payload)).unwrap();
+
+      if (response?.status === "Error" || response?.status === "error") {
+        setExchangeRateError(response.message || "Exchange rate unavailable");
+        dispatch(setExchangeRateData(null));
+        return;
+      }
+
       if (response) {
         const fxRate =
           response.fxRate ||
-          response.converted_value / (parseFloat(formData.sendAmount) || 5) ||
-          115;
+          response.converted_value / (parseFloat(formData.sendAmount) || 5);
+
+        if (!fxRate) {
+          setExchangeRateError("Exchange rate unavailable");
+          dispatch(setExchangeRateData(null));
+          return;
+        }
+
+        setExchangeRateError(null);
 
         const exchangeData = {
           ...response,
@@ -1084,6 +1186,14 @@ const Remittance = () => {
       }
     } catch (error) {
       console.error("Error fetching exchange rate manually:", error);
+      const errMsg =
+        typeof error === "string"
+          ? error
+          : error?.message || error?.data?.message || "Exchange rate unavailable";
+      setExchangeRateError(errMsg);
+      dispatch(setExchangeRateData(null));
+    } finally {
+      setExchangeRateLoading(false);
     }
   }, [
     formData.sendCurrency,
@@ -1247,6 +1357,11 @@ const Remittance = () => {
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
       setAmountError(null); // Clear amount error when currency changes
+      setExchangeRateError(null);
+
+      if (isRemittanceOnlyCustomer && option?.bank_enabled === false) {
+        dispatch(setPaymentMethod("manual"));
+      }
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.startsWith(option?.value)) {
@@ -1256,7 +1371,7 @@ const Remittance = () => {
 
       dispatch(setReceiveAmount(""));
     },
-    [dispatch],
+    [dispatch, isRemittanceOnlyCustomer],
   );
 
   const handleReceiveCurrencyChange = useCallback(
@@ -1266,6 +1381,7 @@ const Remittance = () => {
       dispatch(setExchangeRateData(null));
       setShowRecipientDetails(false);
       setAmountError(null); // Clear amount error when currency changes
+      setExchangeRateError(null);
 
       Object.keys(exchangeRateCache.current).forEach((key) => {
         if (key.includes(`-${option?.value}-`)) {
@@ -1352,10 +1468,12 @@ const Remittance = () => {
     (beneficiary) => {
       dispatch(setSelectedBeneficiary(beneficiary));
       if (beneficiary?.id) {
-        dispatch(fetchBeneficiaryBanks(beneficiary.id));
+        dispatch(
+          fetchBeneficiaryBanks({ customerId, beneficiaryId: beneficiary.id }),
+        );
       }
     },
-    [dispatch],
+    [dispatch, customerId],
   );
 
   const handleBankSelect = useCallback(
@@ -2065,12 +2183,17 @@ const Remittance = () => {
         handleBankSelect(fullBeneficiary.benef_banks[0]);
       } else {
         console.log("🔍 Fetching banks for new beneficiary");
-        dispatch(fetchBeneficiaryBanks(fullBeneficiary.id));
+        dispatch(
+          fetchBeneficiaryBanks({
+            customerId,
+            beneficiaryId: fullBeneficiary.id,
+          }),
+        );
       }
 
       setPendingNewBeneficiaryId(null);
     }
-  }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch]);
+  }, [beneficiaries, pendingNewBeneficiaryId, handleBeneficiarySelect, handleBankSelect, dispatch, customerId]);
 
   if (initialLoading) {
     return (
@@ -2182,7 +2305,7 @@ const Remittance = () => {
             purposeOptions={purposeOptions}
             incomeSourceOptions={incomeSourceOptions}
             relationOptions={relationOptions}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             onPaymentMethodChange={handlePaymentMethodChange}
             onFieldChange={handleFieldChange}
             copyToClipboard={copyToClipboard}
@@ -2205,7 +2328,7 @@ const Remittance = () => {
             purposeOptions={purposeOptions}
             incomeSourceOptions={incomeSourceOptions}
             relationOptions={relationOptions}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             selectedCurrency={formData.sendCurrency?.value}
             silaBankAccounts={silaBankAccounts}
             hasSilaAccounts={hasSilaAccounts}
@@ -2372,9 +2495,9 @@ const Remittance = () => {
                       <button
                         onClick={fetchExchangeRateManual}
                         className="text-xs text-indigo-500 hover:text-indigo-700 font-medium flex items-center gap-1 justify-end w-full"
-                        disabled={loading}
+                        disabled={exchangeRateLoading}
                       >
-                        {loading ? (
+                        {exchangeRateLoading ? (
                           <>
                             <FaSpinner className="w-3 h-3 animate-spin" />
                             <span>...</span>
@@ -2388,6 +2511,20 @@ const Remittance = () => {
                       </button>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {exchangeRateLoading && !exchangeRateData?.fxRate && (
+                <div className="py-3 px-6 bg-indigo-50/30 border-y border-indigo-100 flex items-center gap-2">
+                  <FaSpinner className="w-4 h-4 text-indigo-500 flex-shrink-0 animate-spin" />
+                  <p className="text-sm text-indigo-700">Fetching exchange rate...</p>
+                </div>
+              )}
+
+              {!exchangeRateLoading && exchangeRateError && !exchangeRateData?.fxRate && (
+                <div className="py-3 px-6 bg-red-50 border-y border-red-100 flex items-center gap-2">
+                  <FaExclamationTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                  <p className="text-sm text-red-700">{exchangeRateError}</p>
                 </div>
               )}
 
@@ -2413,11 +2550,9 @@ const Remittance = () => {
                       <input
                         type="text"
                         value={formData.receiveAmount || ""}
-                        onChange={(e) =>
-                          handleReceiveAmountChange(e.target.value)
-                        }
+                        readOnly
                         placeholder="0.00"
-                        className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-emerald-50 border border-emerald-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 focus:outline-none transition-all duration-200"
+                        className="w-full pl-10 pr-4 py-4 text-3xl font-bold bg-emerald-50 border border-emerald-200 rounded-xl cursor-not-allowed transition-all duration-200"
                         inputMode="decimal"
                       />
                     </div>
@@ -2470,7 +2605,7 @@ const Remittance = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {paymentOptions.map((option) => {
+                {availablePaymentOptions.map((option) => {
                   const isSelected = formData.paymentMethod === option.value;
                   return (
                     <motion.button
@@ -2554,10 +2689,9 @@ const Remittance = () => {
                     <span className="text-slate-600">Transfer fee</span>
                     <span className="font-semibold text-slate-900">
                       {formData.sendCurrency?.value}{" "}
-                      {parseFloat(exchangeRateData?.fee || 0).toLocaleString(
-                        undefined,
-                        { minimumFractionDigits: 2 }
-                      )}
+                      {fee.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                      })}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-2 border-t border-slate-200">
@@ -2578,6 +2712,7 @@ const Remittance = () => {
                 manualAccountDetails={manualAccountDetails}
                 manualAccountError={manualAccountError}
                 manualDetailsLoading={manualDetailsLoading}
+                remittanceCurrenciesError={remittanceCurrenciesError}
                 formData={formData}
                 copyToClipboard={copyToClipboard}
                 copiedField={copiedField}
@@ -2622,7 +2757,7 @@ const Remittance = () => {
         return (
           <Step2Details
             formData={formData}
-            paymentOptions={paymentOptions}
+            paymentOptions={availablePaymentOptions}
             beneficiaryBanks={beneficiaryBanks}
             selectedBeneficiary={selectedBeneficiary}
             selectedBank={selectedBank}
@@ -3108,6 +3243,7 @@ const ManualDepositSection = ({
   manualAccountDetails,
   manualAccountError,
   manualDetailsLoading,
+  remittanceCurrenciesError,
   formData,
   copyToClipboard,
   copiedField,
@@ -3151,9 +3287,9 @@ const ManualDepositSection = ({
   if (manualDetailsLoading) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
-        <div className="text-center py-8">
+        <div className="flex flex-col items-center justify-center py-8">
           <RingLoader color="#6366f1" size={40} />
-          <p className="mt-4 text-slate-600">Loading bank details...</p>
+          <p className="mt-4 text-slate-600 text-center">Loading bank details...</p>
         </div>
       </div>
     );
@@ -3167,10 +3303,10 @@ const ManualDepositSection = ({
             <FaUniversity className="w-8 h-8 text-slate-400" />
           </div>
           <h4 className="text-lg font-semibold text-slate-900 mb-2">
-            Enter Transfer Amount
+            {remittanceCurrenciesError ? "Manual Deposit Unavailable" : "Enter Transfer Amount"}
           </h4>
           <p className="text-slate-600">
-            Please enter the amount you wish to send to view deposit details
+            {remittanceCurrenciesError}
           </p>
         </div>
       </div>

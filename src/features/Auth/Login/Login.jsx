@@ -29,6 +29,8 @@ import {
   verifyPasscode,
   verifyOTP,
   downloadManual,
+  resendOtpLogin,
+  resendPasscodeLogin,
 } from "../../Auth/authThunk";
 
 // Selectors
@@ -92,7 +94,7 @@ import {
   selectLastDownloadUrl,
 } from "../../Auth/slices/downloadSlice";
 import { setSelectedCountry } from "../../Auth/slices/countrySlice";
-import { partnerLogin, fetchAndStoreLogoutTime } from "../../../services/authService";
+import { partnerLogin, fetchAndStoreLogoutTime, getFrontendPopup } from "../../../services/authService";
 
 const Login = () => {
   const dispatch = useDispatch();
@@ -113,6 +115,7 @@ const Login = () => {
   const [selectedPhoneCode, setSelectedPhoneCode] = useState(null);
 
   const isPartnerLoggingInRef = useRef(false);
+  const hasInitPartnerLoginRef = useRef(false);
 
   const [isPartnerLoginLoading, setIsPartnerLoginLoading] = useState(false);
 
@@ -130,6 +133,13 @@ const Login = () => {
   const [selectedInstitutionId, setSelectedInstitutionId] = useState("");
   const [isSubmittingInstitution, setIsSubmittingInstitution] = useState(false);
   const pendingInstitutionPayloadRef = useRef(null);
+  const [showDownloadManual, setShowDownloadManual] = useState(false);
+  const [hasAccount, setHasAccount] = useState(null);
+  const [popupCheckDone, setPopupCheckDone] = useState(false);
+  const [showSsnModal, setShowSsnModal] = useState(false);
+  const [ssnCustomerUuid, setSsnCustomerUuid] = useState(null);
+  const [ssnUpdatedBy, setSsnUpdatedBy] = useState(null);
+  const [isSubmittingSsn, setIsSubmittingSsn] = useState(false);
 
   // Select state from Redux
   const auth = useSelector(selectAuth);
@@ -147,6 +157,49 @@ const Login = () => {
   const showCustomerType = useSelector(selectShowCustomerType);
   const isRedirecting = useSelector(selectIsRedirecting);
   const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+
+  const [showFrontendPopup, setShowFrontendPopup] = useState(false);
+  const [popupImageUrl, setPopupImageUrl] = useState("");
+
+  // State for resend OTP login & dynamic countdown
+  const [loginRequestUserId, setLoginRequestUserId] = useState(null);
+  const [loginRequestUserType, setLoginRequestUserType] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
+
+  // Dynamic countdown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
+
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  };
+
+  // State for resend Passcode login & dynamic countdown
+  const [passcodeLoginUserId, setPasscodeLoginUserId] = useState(null);
+  const [passcodeLoginUserType, setPasscodeLoginUserType] = useState(null);
+  const [passcodeCooldown, setPasscodeCooldown] = useState(0);
+  const [isResendingPasscode, setIsResendingPasscode] = useState(false);
+
+  // Dynamic countdown timer for Passcode
+  useEffect(() => {
+    if (passcodeCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setPasscodeCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [passcodeCooldown]);
 
   // Proper loading state handling
   const isLoading = auth.loading?.general || false;
@@ -214,19 +267,49 @@ const Login = () => {
 
   // Run partner login on page load & set default sign-in option (email/mobile)
   useEffect(() => {
+    if (hasInitPartnerLoginRef.current) {
+      return;
+    }
+    hasInitPartnerLoginRef.current = true;
+
     const initPartnerLogin = async () => {
       try {
         setIsPartnerLoginLoading(true);
 
-        const response = await partnerLogin();
+        const response = await partnerLogin(true);
 
-        // Extract sign in type ("email" or "mobile") from response or cached storage
+        if (response?.data?.download_registration_manual === "Y") {
+          setShowDownloadManual(true);
+        } else {
+          setShowDownloadManual(false);
+        }
+
         const signInType =
           response?.data?.default_signin_type ||
           localStorage.getItem("default_signin_type");
 
         if (signInType) {
           dispatch(setInputType(signInType));
+        }
+
+        const partnerId = localStorage.getItem("whitelabelledpartnerid");
+
+        if (partnerId) {
+          try {
+            const popupResponse = await getFrontendPopup(partnerId);
+            const imageUrl = popupResponse?.data?.image_url;
+
+            if (imageUrl) {
+              setPopupImageUrl(imageUrl);
+              setShowFrontendPopup(true);
+            }
+          } catch (popupError) {
+            console.error("Frontend popup fetch error:", popupError);
+          } finally {
+            setPopupCheckDone(true);
+          }
+        } else {
+          setPopupCheckDone(true);
         }
       } catch (error) {
         console.error("Partner login error on mount:", error);
@@ -442,6 +525,21 @@ const Login = () => {
     // Check for owner login first with proper validation
     if (response.is_owner_login === true || response.is_owner_login === "1") {
       return response;
+    }
+
+    // Account application pending, no Plaid action needed - just show message
+    if (response.isAccountPending) {
+      dispatch(
+        openModal({
+          title: "Account Application Pending",
+          message: response.plaid_message,
+          type: "warning",
+          modalProps: {
+            showCloseButton: true,
+          },
+        })
+      );
+      return null;
     }
 
     if (response.requiresPlaidRedirect && response.plaidUrl) {
@@ -737,6 +835,12 @@ const Login = () => {
           if (processedData.beneficaryId) {
             localStorage.setItem('beneficaryId', processedData.beneficaryId);
           }
+          if (processedData.applied_zai_account) {
+            localStorage.setItem('applied_zai_account', processedData.applied_zai_account);
+          }
+          if (processedData.hasSilaBankAccount) {
+            localStorage.setItem('hasSilaBankAccount', processedData.hasSilaBankAccount);
+          }
 
           dispatch(setAuthState(authState));
           await fetchAndStoreLogoutTime();
@@ -935,6 +1039,20 @@ const Login = () => {
         return;
       }
 
+      // Capture response data from request-passcode-login
+      if (result.data) {
+        if (result.data.login_request_user_id) {
+          setPasscodeLoginUserId(result.data.login_request_user_id);
+        }
+        if (result.data.login_request_user_type) {
+          setPasscodeLoginUserType(result.data.login_request_user_type);
+          setSelectedUserType(result.data.login_request_user_type);
+        }
+        if (result.data.resend_minutes) {
+          setPasscodeCooldown(Number(result.data.resend_minutes) * 60);
+        }
+      }
+
       dispatch(setShowPasscodeInput(true));
       dispatch(setPasscodeSent(true));
       dispatch(setPasscode(new Array(6).fill("")));
@@ -1069,6 +1187,19 @@ const Login = () => {
         return;
       }
 
+      // Capture response data from send-otp-login
+      if (result.data) {
+        if (result.data.login_request_user_id) {
+          setLoginRequestUserId(result.data.login_request_user_id);
+        }
+        if (result.data.login_request_user_type) {
+          setLoginRequestUserType(result.data.login_request_user_type);
+          setSelectedUserType(result.data.login_request_user_type);
+        }
+        if (result.data.resend_minutes) {
+          setResendCooldown(Number(result.data.resend_minutes) * 60);
+        }
+      }
 
       if (!result.message || result.message === "OTP sent successfully") {
         dispatch(setShowOtpInput(true));
@@ -1107,7 +1238,6 @@ const Login = () => {
         return;
       }
 
-
       dispatch(
         openModal({
           title: "Error",
@@ -1115,6 +1245,102 @@ const Login = () => {
           type: "error",
         })
       );
+    }
+  };
+
+  const handleResendOTP = async () => {
+    if (isResendingOtp || resendCooldown > 0) return;
+
+    if (!loginRequestUserId || !loginRequestUserType) {
+      handleGenerateOTP();
+      return;
+    }
+
+    setIsResendingOtp(true);
+
+    try {
+      const payload = {
+        login_request_user_id: loginRequestUserId,
+        login_request_user_type: loginRequestUserType,
+      };
+
+      const result = await dispatch(resendOtpLogin(payload)).unwrap();
+
+      // Reset cooldown dynamically from the returned minutes
+      const minutes = result.data?.resend_minutes || 1;
+      setResendCooldown(Number(minutes) * 60);
+
+      dispatch(setOtp(new Array(6).fill("")));
+
+      dispatch(
+        openModal({
+          title: "Success",
+          message: result.message || "OTP resent successfully.",
+          type: "success",
+          modalProps: {
+            autoClose: true,
+            autoCloseDelay: 3000,
+          },
+        })
+      );
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: typeof error === "string" ? error : error?.message || "Failed to resend OTP",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsResendingOtp(false);
+    }
+  };
+
+  const handleResendPasscode = async () => {
+    if (isResendingPasscode || passcodeCooldown > 0) return;
+
+    if (!passcodeLoginUserId || !passcodeLoginUserType) {
+      handleGeneratePasscode({ preventDefault: () => { } });
+      return;
+    }
+
+    setIsResendingPasscode(true);
+
+    try {
+      const payload = {
+        login_request_user_id: passcodeLoginUserId,
+        login_request_user_type: passcodeLoginUserType,
+      };
+
+      const result = await dispatch(resendPasscodeLogin(payload)).unwrap();
+
+      // Set countdown dynamically from returned resend_minutes
+      const minutes = result.data?.resend_minutes || 1;
+      setPasscodeCooldown(Number(minutes) * 60);
+
+      dispatch(setPasscode(new Array(6).fill("")));
+
+      dispatch(
+        openModal({
+          title: "Success",
+          message: result.message || "Passcode resent successfully.",
+          type: "success",
+          modalProps: {
+            autoClose: true,
+            autoCloseDelay: 3000,
+          },
+        })
+      );
+    } catch (error) {
+      dispatch(
+        openModal({
+          title: "Error",
+          message: typeof error === "string" ? error : error?.message || "Failed to resend passcode",
+          type: "error",
+        })
+      );
+    } finally {
+      setIsResendingPasscode(false);
     }
   };
 
@@ -1133,7 +1359,20 @@ const Login = () => {
     try {
       if (flow === "passcode") {
         dispatch(setLoading(true));
-        await dispatch(generatePasscode(payload)).unwrap();
+        const result = await dispatch(generatePasscode(payload)).unwrap();
+
+        if (result.data) {
+          if (result.data.login_request_user_id) {
+            setPasscodeLoginUserId(result.data.login_request_user_id);
+          }
+          if (result.data.login_request_user_type) {
+            setPasscodeLoginUserType(result.data.login_request_user_type);
+            setSelectedUserType(result.data.login_request_user_type); // Keeps selected user type synced
+          }
+          if (result.data.resend_minutes) {
+            setPasscodeCooldown(Number(result.data.resend_minutes) * 60);
+          }
+        }
 
         dispatch(setShowPasscodeInput(true));
         dispatch(setPasscodeSent(true));
@@ -1142,7 +1381,9 @@ const Login = () => {
         dispatch(
           openModal({
             title: "Passcode Sent",
-            message: "A 6-digit passcode has been sent to your email address.",
+            message:
+              result.message ||
+              "A 6-digit passcode has been sent to your email address.",
             type: "success",
             modalProps: {
               autoClose: true,
@@ -1373,9 +1614,67 @@ const Login = () => {
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
+        if (result.plaid_kyc_required === "Y") {
+          if (result.plaidUrl) {
+            dispatch(
+              openModal({
+                title: "Verification Required",
+                message: "Redirecting to KYC Verification. Please complete and login",
+                type: "info",
+                modalProps: {
+                  showSpinner: true,
+                  autoClose: true,
+                  autoCloseDelay: 2000,
+                },
+              })
+            );
+
+            setTimeout(() => {
+              dispatch(closeModal());
+              window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+            }, 2000);
+          } else {
+            dispatch(
+              openModal({
+                title: "Verification Error",
+                message: result.plaid_message || "Unable to complete KYC verification. Please contact support.",
+                type: "error",
+                modalProps: {
+                  showCloseButton: true,
+                },
+              })
+            );
+          }
+          return;
+        }
+
+        if (!result.customerSsn) {
+          setSsnCustomerUuid(result.customerUuid);
+          setSsnUpdatedBy(result.customer_id);
+          setShowSsnModal(true);
+          return;
+        }
         dispatch(
           openModal({
             title: "KYC Verification Pending",
+            message: result.plaid_message,
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+      // NEW: Case 1b - Non-Remittance Customer, KYC pending but no Plaid action required (Show message, NO redirect)
+      if (result.isAccountPending) {
+        dispatch(setShowPasscodeInput(false));
+        dispatch(setPasscodeSent(false));
+        dispatch(setPasscode(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Account Application Pending",
             message: result.plaid_message,
             type: "warning",
             modalProps: {
@@ -1392,22 +1691,25 @@ const Login = () => {
         dispatch(setPasscodeSent(false));
         dispatch(setPasscode(new Array(6).fill("")));
 
-
-        window.location.href = result.plaidUrl;
-
-        // Optional: Show notification
+        // 1. Show the message modal first
         dispatch(
           openModal({
             title: "Verification Required",
-            message: "Redirecting to verification page...",
+            message: "Redirecting to KYC Verification. Please complete and login",
             type: "info",
             modalProps: {
               showSpinner: true,
               autoClose: true,
-              autoCloseDelay: 3000,
+              autoCloseDelay: 2000,
             },
           })
         );
+
+        // 2. Open Plaid in a new tab after 2 seconds
+        setTimeout(() => {
+          dispatch(closeModal());
+          window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+        }, 2000);
         return;
       }
 
@@ -1470,6 +1772,12 @@ const Login = () => {
         }
         if (processedData.beneficaryId) {
           localStorage.setItem('beneficaryId', processedData.beneficaryId);
+        }
+        if (processedData.applied_zai_account) {
+          localStorage.setItem('applied_zai_account', processedData.applied_zai_account);
+        }
+        if (processedData.hasSilaBankAccount) {
+          localStorage.setItem('hasSilaBankAccount', processedData.hasSilaBankAccount);
         }
 
         await fetchAndStoreLogoutTime();
@@ -1611,10 +1919,70 @@ const Login = () => {
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
+        if (result.plaid_kyc_required === "Y") {
+          if (result.plaidUrl) {
+            dispatch(
+              openModal({
+                title: "Verification Required",
+                message: "Redirecting to KYC Verification. Please complete and login",
+                type: "info",
+                modalProps: {
+                  showSpinner: true,
+                  autoClose: true,
+                  autoCloseDelay: 2000,
+                },
+              })
+            );
+
+            setTimeout(() => {
+              dispatch(closeModal());
+              window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
+            }, 2000);
+          } else {
+            dispatch(
+              openModal({
+                title: "Verification Error",
+                message: result.plaid_message || "Unable to complete KYC verification. Please contact support.",
+                type: "error",
+                modalProps: {
+                  showCloseButton: true,
+                },
+              })
+            );
+          }
+          return;
+        }
+
+        if (!result.customerSsn) {
+          setSsnCustomerUuid(result.customerUuid);
+          setSsnUpdatedBy(result.customer_id);
+          setShowSsnModal(true);
+          return;
+        }
+
         dispatch(
           openModal({
             title: "Account Application Pending",
-            message: result.plaid_message || "Your KYC Verification is in Pending state. Please contact support",
+            message: result.plaid_message,
+            type: "warning",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+        return;
+      }
+
+      // CASE 1b: Non-Remittance Customer, KYC pending but no Plaid action required - Show message, NO redirect
+      if (result.isAccountPending) {
+        dispatch(setShowOtpInput(false));
+        dispatch(setOtpSent(false));
+        dispatch(setOtp(new Array(6).fill("")));
+
+        dispatch(
+          openModal({
+            title: "Account Application Pending",
+            message: result.plaid_message,
             type: "warning",
             modalProps: {
               showCloseButton: true,
@@ -1630,26 +1998,25 @@ const Login = () => {
         dispatch(setOtpSent(false));
         dispatch(setOtp(new Array(6).fill("")));
 
-        // Show redirecting message first
+        // 1. Show the message modal first
         dispatch(
           openModal({
-            title: "Redirecting",
-            message: "Redirecting to verification page...",
+            title: "Verification Required",
+            message: "Redirecting to KYC Verification.Please complete and login",
             type: "info",
             modalProps: {
               showSpinner: true,
               autoClose: true,
               autoCloseDelay: 2000,
             },
-            disableBackdropClick: true,
           })
         );
 
-        // Then redirect after 2 seconds
+        // 2. Open Plaid in a new tab after 2 seconds
         setTimeout(() => {
-          window.location.href = result.plaidUrl;
+          dispatch(closeModal());
+          window.open(result.plaidUrl, "_blank", "noopener,noreferrer");
         }, 2000);
-
         return;
       }
 
@@ -1703,6 +2070,12 @@ const Login = () => {
         }
         if (result.beneficaryId) {
           localStorage.setItem('beneficaryId', result.beneficaryId);
+        }
+        if (result.applied_zai_account) {
+          localStorage.setItem('applied_zai_account', result.applied_zai_account);
+        }
+        if (result.hasSilaBankAccount) {
+          localStorage.setItem('hasSilaBankAccount', result.hasSilaBankAccount);
         }
 
         await fetchAndStoreLogoutTime();
@@ -1781,6 +2154,77 @@ const Login = () => {
       }
     }
   };
+
+  const ssnValidationSchema = Yup.object({
+    ssn: Yup.string()
+      .required("SSN is required")
+      .matches(/^\d{3}-\d{2}-\d{4}$/, "Enter a valid SSN (XXX-XX-XXXX)"),
+  });
+
+  const ssnFormik = useFormik({
+    initialValues: { ssn: "" },
+    validationSchema: ssnValidationSchema,
+    enableReinitialize: true,
+    onSubmit: async (values, { resetForm }) => {
+      const cleaned = values.ssn.replace(/\D/g, "");
+      const formattedSsn = `${cleaned.slice(0, 3)}-${cleaned.slice(3, 5)}-${cleaned.slice(5)}`;
+
+      setIsSubmittingSsn(true);
+
+      try {
+        const token = localStorage.getItem("bearertoken");
+
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/customers/update-ssn`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            customer_id: ssnCustomerUuid,
+            ssn: formattedSsn,
+            update_source: "zap",
+            updated_user_type: "customer",
+            updated_by: ssnUpdatedBy,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const message =
+            typeof result.message === "string"
+              ? result.message
+              : Object.values(result.message || {}).flat().join(" ");
+          throw new Error(message || "Failed to update SSN");
+        }
+
+        setShowSsnModal(false);
+        resetForm();
+
+        dispatch(
+          openModal({
+            title: "SSN Updated",
+            message: result.message || "Your SSN has been submitted. Your account will be approved within 24 to 48 hours.",
+            type: "success",
+            modalProps: {
+              showCloseButton: true,
+            },
+          })
+        );
+      } catch (error) {
+        dispatch(
+          openModal({
+            title: "Error",
+            message: error.message || "Failed to update SSN",
+            type: "error",
+          })
+        );
+      } finally {
+        setIsSubmittingSsn(false);
+      }
+    },
+  });
 
   const handleNavigation = () => {
     navigate("/selectaccounttype");
@@ -2130,111 +2574,104 @@ const Login = () => {
             </div>
           </form>
 
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="mt-4 flex justify-center"
-          >
-            <motion.button
-              whileHover={{
-                scale: 1.05,
-                boxShadow: "0 10px 25px -5px rgba(245, 158, 11, 0.5), 0 0 0 2px rgba(245, 158, 11, 0.2)",
-              }}
-              whileTap={{ scale: 0.95 }}
+          <div className="mt-4 flex justify-center text-sm text-gray-600">
+            New here?{" "}
+            <button
+              type="button"
               onClick={handleNavigation}
-              className="relative w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-xl 
-               bg-gradient-to-r from-amber-500 to-orange-600 
-               text-white font-semibold shadow-lg
-               transition-all duration-300 overflow-hidden group"
+              className="ml-1 text-blue-600 hover:underline font-medium"
             >
-              <motion.div
-                className="absolute inset-0 bg-gradient-to-r from-amber-600 to-orange-700 opacity-0 group-hover:opacity-100"
-                initial={{ x: "-100%" }}
-                whileHover={{
-                  x: "100%",
-                  transition: { duration: 0.6, ease: "easeInOut" },
-                }}
-              />
+              Create an account
+            </button>
+          </div>
 
-              <div className="absolute inset-0 overflow-hidden">
-                {[...Array(3)].map((_, i) => (
-                  <motion.div
-                    key={i}
-                    className="absolute w-1 h-1 bg-white rounded-full"
-                    initial={{
-                      x: "-20px",
-                      y: Math.random() * 40,
-                      opacity: 0,
-                      scale: 0,
-                    }}
-                    whileHover={{
-                      x: "calc(100% + 20px)",
-                      opacity: [0, 1, 0],
-                      scale: [0, 1, 0],
-                      transition: {
-                        duration: 0.6,
-                        delay: i * 0.1,
-                        times: [0, 0.5, 1],
-                      },
-                    }}
-                  />
-                ))}
-              </div>
-
-              <motion.div
-                className="absolute inset-0 rounded-xl border-2 border-white/30"
-                whileHover={{
-                  borderColor: "rgba(255, 255, 255, 0.5)",
-                  scale: 1.02,
-                  transition: {
-                    duration: 0.3,
-                    repeat: Infinity,
-                    repeatType: "reverse",
-                    repeatDelay: 0.5,
-                  },
-                }}
-              />
-
-              <div className="relative z-10 flex items-center justify-center space-x-2">
-                <motion.div
-                  whileHover={{ rotate: 360 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <UserPlus className="w-5 h-5" />
-                </motion.div>
-                <span className="text-sm font-medium">Sign Up</span>
-                <motion.div
-                  initial={{ x: -5, opacity: 0 }}
-                  whileHover={{ x: 0, opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <ArrowRight className="w-4 h-4" />
-                </motion.div>
-              </div>
-            </motion.button>
-          </motion.div>
-
-          <button
-            onClick={handleManualDownload}
-            disabled={downloadStatus === "loading"}
-            className="mt-4 w-full py-2 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center gap-2 min-h-[44px]"
-            type="button"
-          >
-            {downloadStatus === "loading" ? (
-              <>
-                <RingLoader size={20} color="#ffffff" />
-                <span className="ml-2">Downloading...</span>
-              </>
-            ) : (
-              <>
-                <MdDownload className="w-5 h-5" />
-                <span>Download Manual</span>
-              </>
-            )}
-          </button>
+          {showDownloadManual && (
+            <button
+              onClick={handleManualDownload}
+              disabled={downloadStatus === "loading"}
+              className="mt-4 w-full py-2 px-4 bg-gray-800 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center gap-2 min-h-[44px]"
+              type="button"
+            >
+              {downloadStatus === "loading" ? (
+                <>
+                  <RingLoader size={20} color="#ffffff" />
+                  <span className="ml-2">Downloading...</span>
+                </>
+              ) : (
+                <>
+                  <MdDownload className="w-5 h-5" />
+                  <span>Download Manual</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ========== UPDATE SSN MODAL ========== */}
+      {showSsnModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button
+              onClick={() => setShowSsnModal(false)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+              disabled={isSubmittingSsn}
+            >
+              <AiOutlineClose size={20} />
+            </button>
+
+            <h2 className="text-xl font-bold text-gray-800 mb-3">
+              KYC Not Verified
+            </h2>
+            <p className="text-gray-600 mb-6 text-sm">
+              Please update your SSN to complete your account verification.
+            </p>
+
+            <form onSubmit={ssnFormik.handleSubmit}>
+              <div className="mb-2">
+                <input
+                  id="ssn"
+                  name="ssn"
+                  type="text"
+                  value={ssnFormik.values.ssn}
+                  onChange={(e) => {
+                    const digits = e.target.value.replace(/\D/g, "").slice(0, 9);
+                    let formatted = digits;
+                    if (digits.length > 5) {
+                      formatted = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+                    } else if (digits.length > 3) {
+                      formatted = `${digits.slice(0, 3)}-${digits.slice(3)}`;
+                    }
+                    ssnFormik.setFieldValue("ssn", formatted);
+                  }}
+                  onBlur={ssnFormik.handleBlur}
+                  placeholder="XXX-XX-XXXX"
+                  maxLength={11}
+                  className="block px-4 py-3 w-full text-sm text-gray-900 bg-transparent border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {ssnFormik.errors.ssn && ssnFormik.touched.ssn && (
+                  <p className="mt-1 text-xs text-red-600">{ssnFormik.errors.ssn}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmittingSsn}
+                className="mt-4 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
+              >
+                {isSubmittingSsn ? (
+                  <>
+                    <RingLoader size={20} color="#ffffff" />
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  "Submit SSN"
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ========== MODAL COMPONENT ========== */}
       <Modal
@@ -2245,6 +2682,50 @@ const Login = () => {
         message={modal.message}
         modalProps={modal.modalProps}
       />
+
+      {showFrontendPopup && popupImageUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="relative inline-block rounded-xl shadow-2xl">
+            <button
+              onClick={() => setShowFrontendPopup(false)}
+              className="absolute top-3 right-3 z-10 bg-black/60 hover:bg-black/80 text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors shadow-md"
+            >
+              <AiOutlineClose size={18} />
+            </button>
+            <img
+              src={popupImageUrl}
+              alt="Announcement"
+              className="block max-w-[90vw] max-h-[90vh] w-auto h-auto rounded-xl object-contain"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ========== NEW / EXISTING USER CHOOSER MODAL ========== */}
+      {popupCheckDone && !showFrontendPopup && hasAccount === null && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-2xl flex flex-col items-center gap-6 text-center">
+            <h1 className="text-2xl font-bold">Welcome</h1>
+            <p className="text-gray-600">Do you already have an account?</p>
+            <div className="flex gap-4 w-full">
+              <button
+                type="button"
+                onClick={() => setHasAccount(true)}
+                className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Yes, Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate("/selectaccounttype")}
+                className="flex-1 px-6 py-3 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+              >
+                No, Sign Up
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========== PLAID IFRAME MODAL ========== */}
       {showPlaidModal && (
@@ -2424,13 +2905,15 @@ const Login = () => {
             <div className="mt-4 text-center">
               <button
                 type="button"
-                onClick={handleGenerateOTP}
-                className="text-blue-600 hover:text-blue-800"
-                disabled={isGeneratingOtp || isVerifyingOtp}
+                onClick={handleResendOTP}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
+                disabled={isGeneratingOtp || isVerifyingOtp || isResendingOtp || resendCooldown > 0}
               >
-                {isGeneratingOtp
-                  ? "Sending..."
-                  : "Didn't receive code? Resend OTP"}
+                {isResendingOtp
+                  ? "Resending OTP..."
+                  : resendCooldown > 0
+                    ? `Resend OTP in ${formatTimer(resendCooldown)}`
+                    : "Didn't receive code? Resend OTP"}
               </button>
             </div>
           </div>
@@ -2682,15 +3165,17 @@ const Login = () => {
               </p>
               <button
                 type="button"
-                onClick={handleGeneratePasscode}
-                className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto"
-                disabled={isGeneratingPasscode}
+                onClick={handleResendPasscode}
+                className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center justify-center gap-2 mx-auto disabled:text-gray-400 disabled:cursor-not-allowed"
+                disabled={isGeneratingPasscode || isVerifyingPasscode || isResendingPasscode || passcodeCooldown > 0}
               >
-                {isGeneratingPasscode ? (
+                {isResendingPasscode ? (
                   <>
                     <RingLoader size={16} color="#3b82f6" />
                     <span>Resending...</span>
                   </>
+                ) : passcodeCooldown > 0 ? (
+                  `Resend Code in ${formatTimer(passcodeCooldown)}`
                 ) : (
                   "Resend Verification Code"
                 )}

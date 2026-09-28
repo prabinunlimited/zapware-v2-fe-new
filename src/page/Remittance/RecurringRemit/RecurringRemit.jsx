@@ -63,7 +63,7 @@ const RecurringRemit = () => {
 
   // Get IDs from localStorage
   const authCustomerId = localStorage.getItem("authcustomer_id");
-  const customerUuid = localStorage.getItem("customerUuid");
+  const customerUuid = localStorage.getItem("customer_uuid");
   const bearerToken = localStorage.getItem("bearertoken");
   const API_URL = import.meta.env.VITE_API_URL;
 

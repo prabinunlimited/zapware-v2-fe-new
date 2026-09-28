@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo,useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useLocation } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -57,22 +57,22 @@ const OpenCurrencyAccount = () => {
   const [expandedDetails, setExpandedDetails] = useState({});
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoType, setInfoType] = useState("");
+  const [accountTypeDescriptions, setAccountTypeDescriptions] = useState({
+    named: "",
+    pooled: "",
+  });
   const [forceRemittanceOnly, setForceRemittanceOnly] = useState(null); // ✅ ADD THIS LINE
   const [isLoadingSpinner, setIsLoadingSpinner] = useState(true);
   const [selectedCurrencyUrl, setSelectedCurrencyUrl] = useState(null);
   const [lastSelectedCurrency, setLastSelectedCurrency] = useState("");
 
+ const hasFetchedRef = useRef(false);
+
   // Storage variables
   const bearertoken = localStorage.getItem("bearertoken");
   const partnerId = localStorage.getItem("whitelabelledpartnerid");
   const isPartner = localStorage.getItem("iswhitelabelledpartner");
-  const showRemitOnly = localStorage.getItem(
-    "showRemittanceOnlyOnRegistration",
-  );
   const hostName = window.location.hostname;
-
-  // Check if partner ID is 8
-  const isPartnerId8 = partnerId === "8";
 
   // Redux Selectors
   const accountOptions = useSelector(selectors.selectAccountOptions) || [];
@@ -128,63 +128,85 @@ const OpenCurrencyAccount = () => {
     }
   }, [API_URL]);
 
-  // 1. INITIALIZATION - Skip fetching account options if partner ID is 8
+    // Fetch Named/Pooled account type descriptions
+    const hasFetchedAccountTypesRef = useRef(false);
   useEffect(() => {
-    if (!accountType) {
-      navigate("/selectaccounttype");
-      return;
-    }
+    if (!API_URL) return;
+    if (hasFetchedAccountTypesRef.current) return;
+    hasFetchedAccountTypesRef.current = true;
 
-    // For partner ID 8, we only want remittance services
-    // if (isPartnerId8) {
-    //   // Automatically select remittance only and clear any selections
-    //   dispatch(actions.setRemittanceOnlyAccepted(true));
-    //   dispatch(actions.clearSelectedAccounts());
-    //   dispatch(actions.setSelectedPackageCurrencies([]));
-    //   return;
-    // }
+    fetch(`${API_URL}/bank-account-type`, {
+      headers: { Authorization: `Bearer ${bearertoken}` },
+    })
+      .then((res) => res.json())
+      .then((res) => {
+        const list = res.data || [];
+        const descriptions = {};
+        list.forEach((item) => {
+          const name = item.name?.toLowerCase();
+          if (name?.includes("named")) descriptions.named = item.description;
+          if (name?.includes("pooled")) descriptions.pooled = item.description;
+        });
+        setAccountTypeDescriptions((prev) => ({ ...prev, ...descriptions }));
+      })
+      .catch(() => {
+        // no fallback — leave blank if the fetch fails
+      });
+  }, [API_URL, bearertoken]);
 
-    dispatch(actions.clearAllSelections());
+  // 1. INITIALIZATION
+useEffect(() => {
+  if (!accountType) {
+    navigate("/selectaccounttype");
+    return;
+  }
 
-    // ⚠️ FIX: Force USA country ID (186) for partner flows
-    const forceCountryId = 186; // USA
+  //  Prevent duplicate dispatches (caused by React Strict Mode)
+  if (hasFetchedRef.current) {
+    console.log("⏭️ Skipping duplicate fetch (Strict Mode)");
+    return;
+  }
 
-    console.log("🌐 Forcing country ID for partner flow:", {
-      originalCountryId: selectedCountryId,
-      forcedCountryId: forceCountryId,
-      accountType,
-      isPartnerPackageModule,
-    });
+  dispatch(actions.clearAllSelections());
 
-    if (isPartnerPackageModule === "Y") {
-      dispatch(
-        actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
-      );
-    } else {
-      dispatch(
-        actions.fetchAccountOptions({
-          accountType,
-          countryId: forceCountryId, // Use forced country ID
-          API_URL,
-        }),
-      );
-    }
-  }, [
+  // ⚠️ FIX: Force USA country ID (186) for partner flows
+  const forceCountryId = 186; // USA
+
+  console.log("🌐 Forcing country ID for partner flow:", {
+    originalCountryId: selectedCountryId,
+    forcedCountryId: forceCountryId,
     accountType,
-    isPartnerId8,
-    // Remove selectedCountryId from dependencies
     isPartnerPackageModule,
-    dispatch,
-    navigate,
-    partnerId,
-    API_URL,
-  ]);
+  });
 
-  // 2. PRICE FETCHING - Skip for partner ID 8
+  // ✅ Mark as fetched BEFORE dispatching
+  hasFetchedRef.current = true;
+
+  if (isPartnerPackageModule === "Y") {
+    dispatch(
+      actions.fetchPackageOptions({ accountType, partnerId, API_URL }),
+    );
+  } else {
+    dispatch(
+      actions.fetchAccountOptions({
+        accountType,
+        countryId: forceCountryId, // Use forced country ID
+        API_URL,
+      }),
+    );
+  }
+}, [
+  accountType,
+  // Remove selectedCountryId from dependencies
+  isPartnerPackageModule,
+  dispatch,
+  navigate,
+  partnerId,
+  API_URL,
+]);
+
+  // 2. PRICE FETCHING
   useEffect(() => {
-    // Skip price fetching for partner ID 8 since we only offer remittance
-    if (isPartnerId8) return;
-
     const count =
       isPartnerPackageModule === "Y"
         ? selectedPackageCurrencies.length
@@ -216,7 +238,6 @@ const OpenCurrencyAccount = () => {
     accountType,
     API_URL,
     bearertoken,
-    isPartnerId8,
   ]);
 
   // 3. ACTION HANDLERS
@@ -324,18 +345,9 @@ const OpenCurrencyAccount = () => {
     }
   };
 
-  // 4. SUBMIT HANDLER (MODIFIED FOR PARTNER ID 8)
+  // 4. SUBMIT HANDLER
   const onFinalSubmit = useCallback(async () => {
     if (isSubmitDisabled) return;
-
-    // For partner ID 8, we only accept remittance services
-    if (isPartnerId8 && !remittanceOnlyAccepted) {
-      setModalMessage(
-        "Only Remittance Services are available for this partner.",
-      );
-      setIsModalOpen(true);
-      return;
-    }
 
     if (
       isPartnerPackageModule === "N" &&
@@ -459,7 +471,6 @@ const OpenCurrencyAccount = () => {
     );
   }, [
     isSubmitDisabled,
-    isPartnerId8,
     isPartnerPackageModule,
     selectedAccounts,
     selectedPackageCurrencies,
@@ -533,32 +544,32 @@ const OpenCurrencyAccount = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex justify-center items-center relative overflow-hidden px-3 sm:px-6">
       {/* Decorative elements */}
       <div className="absolute top-0 left-0 w-full h-72 bg-gradient-to-r from-blue-500/5 to-indigo-500/5"></div>
       <div className="absolute bottom-0 right-0 w-full h-full bg-blue-400/5 rounded-full blur-3xl"></div>
 
       {/* Main Content */}
-      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100 my-8">
+      <div className="w-full max-w-4xl bg-white rounded-2xl shadow-xl overflow-hidden relative z-10 border border-gray-100 my-4 sm:my-8">
         {/* Header Section */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 text-white relative overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-5 sm:p-8 text-white relative overflow-hidden">
           <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-20 translate-x-20"></div>
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-indigo-500/20 rounded-full -translate-x-12 translate-y-12"></div>
 
           <div className="relative z-10">
-            <div className="flex items-center justify-center mb-4">
-              <div className="bg-white/20 p-4 rounded-2xl mr-4 backdrop-blur-sm">
+            <div className="flex items-center justify-center mb-4 pr-8 sm:pr-0">
+              <div className="bg-white/20 p-3 sm:p-4 rounded-2xl mr-3 sm:mr-4 backdrop-blur-sm shrink-0">
                 <FontAwesomeIcon
                   icon={getAccountTypeIcon()}
-                  className="text-2xl"
+                  className="text-xl sm:text-2xl"
                 />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-bold">
+              <h1 className="text-xl sm:text-3xl font-bold">
                 {getAccountTypeTitle()}
               </h1>
             </div>
             {!forceRemittanceOnly && (
-              <p className="text-center text-blue-100 text-sm opacity-90">
+              <p className="text-center text-blue-100 text-xs sm:text-sm opacity-90">
                 {ucaDescription ||
                   "Select your currency accounts for international transactions"}
               </p>
@@ -568,17 +579,17 @@ const OpenCurrencyAccount = () => {
           {/* Close Button */}
           <button
             onClick={() => navigate(-1)}
-            className="absolute top-6 right-6 z-10 p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
+            className="absolute top-3 right-3 sm:top-6 sm:right-6 z-10 p-2.5 sm:p-3 rounded-xl bg-white/10 backdrop-blur-sm shadow-md hover:bg-white/20 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-white/50 group"
             aria-label="Close"
           >
             <FontAwesomeIcon
               icon={faTimes}
-              className="text-lg text-white group-hover:text-gray-200 transition-colors"
+              className="text-base sm:text-lg text-white group-hover:text-gray-200 transition-colors"
             />
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
 
           {/* Service Type Selection */}
           <div className="mb-8">
@@ -591,7 +602,7 @@ const OpenCurrencyAccount = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Currency Accounts Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${!remittanceOnlyAccepted
+                  className={`relative rounded-2xl border-2 p-4 sm:p-6 cursor-pointer transition-all duration-300 ${!remittanceOnlyAccepted
                     ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100 shadow-lg"
                     : "border-gray-200 bg-white hover:border-blue-300 hover:shadow-md"
                     }`}
@@ -646,7 +657,7 @@ const OpenCurrencyAccount = () => {
 
                 {/* Remittance Only Option */}
                 <div
-                  className={`relative rounded-2xl border-2 p-6 cursor-pointer transition-all duration-300 ${remittanceOnlyAccepted
+                  className={`relative rounded-2xl border-2 p-4 sm:p-6 cursor-pointer transition-all duration-300 ${remittanceOnlyAccepted
                     ? "border-green-500 bg-green-50 ring-2 ring-green-100 shadow-lg"
                     : "border-gray-200 bg-white hover:border-green-300 hover:shadow-md"
                     }`}
@@ -701,26 +712,26 @@ const OpenCurrencyAccount = () => {
               </div>
             ) : (
               // ONLY when API returns empty data - Show only Remittance (no option to switch)
-              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-8">
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-2xl p-4 sm:p-8">
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-green-100 rounded-full mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 bg-green-100 rounded-full mb-4 sm:mb-6">
                     <FontAwesomeIcon
                       icon={faExchangeAlt}
-                      className="text-green-600 text-3xl"
+                      className="text-green-600 text-2xl sm:text-3xl"
                     />
                   </div>
 
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 sm:mb-4">
                     Remittance Services
                   </h3>
 
-                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-lg">
+                  <p className="text-gray-600 mb-6 max-w-2xl mx-auto text-sm sm:text-lg">
                     Send and receive money internationally with fast, secure,
                     and cost-effective transfers. No need for multiple currency
                     accounts.
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     <div className="bg-white p-5 rounded-xl border border-green-100 shadow-sm">
                       <div className="flex items-center mb-3">
                         <div className="bg-green-100 p-3 rounded-lg mr-4">
@@ -814,20 +825,18 @@ const OpenCurrencyAccount = () => {
           </div>
 
           {/* ========== CURRENCY ACCOUNTS SELECTION ========== */}
-          {/* Hide currency selection for partner ID 8 */}
-          {!isPartnerId8 &&
-            !remittanceOnlyAccepted &&
+          {!remittanceOnlyAccepted &&
             isPartnerPackageModule === "N" && (
               <div className="mb-8">
                 {/* Header */}
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-bold text-gray-800">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800">
                     Select Currency Accounts
                   </h2>
                   <div className="flex items-center space-x-2">
                     <FontAwesomeIcon
                       icon={faSearch}
-                      className="text-gray-400"
+                      className="text-gray-400 shrink-0"
                     />
                     <input
                       type="text"
@@ -836,7 +845,7 @@ const OpenCurrencyAccount = () => {
                       onChange={(e) =>
                         dispatch(actions.setSearchTerm(e.target.value))
                       }
-                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full sm:w-auto px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -844,8 +853,8 @@ const OpenCurrencyAccount = () => {
                 {/* Named Accounts Section */}
                 {filteredNamedAccounts.length > 0 && (
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-4">
+                      <div className="flex items-center flex-wrap">
                         <button
                           onClick={() => toggleSection("named")}
                           className="mr-3 text-gray-600 hover:text-gray-800"
@@ -858,7 +867,7 @@ const OpenCurrencyAccount = () => {
                             }
                           />
                         </button>
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                           <FontAwesomeIcon
                             icon={faUser}
                             className="mr-2 text-blue-500"
@@ -876,7 +885,7 @@ const OpenCurrencyAccount = () => {
                           <FontAwesomeIcon icon={faCircleInfo} />
                         </button>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs sm:text-sm text-gray-500 ml-8 sm:ml-0">
                         Dedicated accounts in your name
                       </div>
                     </div>
@@ -908,8 +917,8 @@ const OpenCurrencyAccount = () => {
                 {/* Pooled Accounts Section */}
                 {filteredPooledAccounts.length > 0 && (
                   <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-4">
+                      <div className="flex items-center flex-wrap">
                         <button
                           onClick={() => toggleSection("pooled")}
                           className="mr-3 text-gray-600 hover:text-gray-800"
@@ -922,7 +931,7 @@ const OpenCurrencyAccount = () => {
                             }
                           />
                         </button>
-                        <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center">
                           <FontAwesomeIcon
                             icon={faUsers}
                             className="mr-2 text-indigo-500"
@@ -940,7 +949,7 @@ const OpenCurrencyAccount = () => {
                           <FontAwesomeIcon icon={faCircleInfo} />
                         </button>
                       </div>
-                      <div className="text-sm text-gray-500">
+                      <div className="text-xs sm:text-sm text-gray-500 ml-8 sm:ml-0">
                         Shared accounts with virtual IBANs
                       </div>
                     </div>
@@ -1068,16 +1077,15 @@ const OpenCurrencyAccount = () => {
               </div>
             )}
 
-          {/* Package View (if enabled) - Hide for partner ID 8 */}
-          {!isPartnerId8 &&
-            isPartnerPackageModule === "Y" &&
+          {/* Package View (if enabled) */}
+          {isPartnerPackageModule === "Y" &&
             !remittanceOnlyAccepted ? (
             <div className="mb-8">
               <div className="text-center mb-6">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
                   Premium Currency Packages
                 </h3>
-                <p className="text-gray-600">
+                <p className="text-sm sm:text-base text-gray-600">
                   Choose a package that fits your international needs
                 </p>
               </div>
@@ -1094,7 +1102,7 @@ const OpenCurrencyAccount = () => {
                   return (
                     <div
                       key={pkg.package_id}
-                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-6 transition-all hover:shadow-md ${isActivePackage
+                      className={`bg-gradient-to-b from-white to-slate-50 rounded-2xl border-2 p-4 sm:p-6 transition-all hover:shadow-md ${isActivePackage
                         ? "border-blue-500 ring-2 ring-blue-100 shadow-sm"
                         : "border-slate-200"
                         } ${!isPackageCompatible && selectedCount > 0
@@ -1108,10 +1116,10 @@ const OpenCurrencyAccount = () => {
                       }}
                     >
                       {/* Package Header */}
-                      <div className="flex justify-between items-start mb-6">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-xl font-bold text-gray-900">
+                          <div className="flex items-center flex-wrap gap-3 mb-2">
+                            <h4 className="text-lg sm:text-xl font-bold text-gray-900">
                               {pkg.package_name}
                             </h4>
                             <span
@@ -1167,8 +1175,8 @@ const OpenCurrencyAccount = () => {
                         </div>
 
                         {/* Price Section */}
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-left sm:text-right shrink-0">
+                          <div className="text-xl sm:text-2xl font-bold text-blue-600">
                             {pkg.package_fee} {pkg.package_currency}
                           </div>
                           <div className="text-xs text-gray-500">
@@ -1177,7 +1185,7 @@ const OpenCurrencyAccount = () => {
                               : "Monthly fee"}
                           </div>
                           {isActivePackage && (
-                            <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+                            <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded inline-block">
                               Your current selection
                             </div>
                           )}
@@ -1186,17 +1194,17 @@ const OpenCurrencyAccount = () => {
 
                       {/* Currencies Grid */}
                       <div className="mb-6">
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
                           <h5 className="font-medium text-gray-700">
                             Available Currencies ({pkg.currencies?.length || 0})
                           </h5>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-xs sm:text-sm text-gray-500">
                             Select up to {pkg.package_accountCount} currency
                             {pkg.package_accountCount !== 1 ? "s" : ""}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                           {pkg.currencies?.map((curr) => {
                             const isSel = selectedPackageCurrencies.includes(
                               curr.currency_id,
@@ -1320,7 +1328,7 @@ const OpenCurrencyAccount = () => {
               {/* Package Selection Summary */}
               {selectedPackageCurrencies.length > 0 && (
                 <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div>
                       <h4 className="font-bold text-gray-900">
                         Your Package Selection
@@ -1331,7 +1339,7 @@ const OpenCurrencyAccount = () => {
                         {selectedPackageCurrencies.length !== 1 ? "s" : ""}
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right">
                       {monthlyCharge ? (
                         <>
                           <div className="text-lg font-bold text-blue-600">
@@ -1351,10 +1359,9 @@ const OpenCurrencyAccount = () => {
                 </div>
               )}
             </div>
-          ) : !isPartnerId8 &&
-            isPartnerPackageModule === "Y" &&
+          ) : isPartnerPackageModule === "Y" &&
             remittanceOnlyAccepted ? (
-            // Remittance Only View for Package Module (non-partner 8)
+            // Remittance Only View for Package Module
             <div className="mb-8">
               <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">
@@ -1449,7 +1456,7 @@ const OpenCurrencyAccount = () => {
             </div>
           ) : null}
 
-          {/* Terms and Remittance Checkbox */}
+          {/* Terms Checkbox */}
           <div className="mb-6 space-y-3">
             <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
               <div>
@@ -1497,86 +1504,7 @@ const OpenCurrencyAccount = () => {
                 </div>
               </label>
             </div>
-
-            {!isPartnerId8 &&
-              ((isPartner === "Y" && showRemitOnly === "Y") ||
-                isPartner === "0") &&
-              remittanceOnlyAccepted && ( // Only show when remittance only is selected
-                <div className="flex items-start p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div>
-                    <input
-                      type="checkbox"
-                      id="remittanceOnly"
-                      checked={remittanceOnlyAccepted}
-                      onChange={(e) =>
-                        dispatch(
-                          actions.setRemittanceOnlyAccepted(e.target.checked),
-                        )
-                      }
-                      className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
-                    />
-                  </div>
-                  <label
-                    htmlFor="remittanceOnly"
-                    className="ml-3 text-gray-700 text-sm flex flex-col"
-                  >
-                    <div className="flex items-center">
-                      <span className="mr-1">Activate</span>
-                      <span className="text-blue-600 font-medium mr-1">
-                        Remittance Only
-                      </span>
-                      <span>mode (for money transfers only)</span>
-                    </div>
-                  </label>
-                </div>
-              )}
           </div>
-
-          {/* DEBUG PANEL - Update the formattedId to use hyphen */}
-          {/* {selectedAccounts.length > 0 && (
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs">
-              <details>
-                <summary className="font-mono text-yellow-800 cursor-pointer">
-                  🔍 Debug: Service Provider IDs (Click to expand)
-                </summary>
-                <div className="mt-2 space-y-1">
-                  {selectedAccounts.map(accountId => {
-                    const parts = accountId.split('_');
-                    if (parts.length >= 3) {
-                      const accountType = parts[0];
-                      const serviceProviderId = parts[1];
-                      const currency = parts[2];
-                      // ✅ Format with currency code: "1-named-AED"
-                      const formattedId = `${serviceProviderId}-${accountType}-${currency}`;
-                      return (
-                        <div key={accountId} className="font-mono text-xs">
-                          <span className="text-blue-600">{currency}</span>:
-                          <span className="text-green-600 ml-2">"{formattedId}"</span>
-                          <span className="text-gray-500 ml-2">({accountType})</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })}
-                  <div className="mt-2 pt-2 border-t border-yellow-200">
-                    <span className="font-bold">Will send to API:</span>
-                    <pre className="mt-1 bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
-                      {JSON.stringify({
-                        service_provide_ids: [...new Set(selectedAccounts.map(accountId => {
-                          const parts = accountId.split('_');
-                          return parts.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
-                        }).filter(Boolean))],
-                        service_provider_id: (() => {
-                          const parts = selectedAccounts[0]?.split('_');
-                          return parts?.length >= 3 ? `${parts[1]}-${parts[0]}-${parts[2]}` : null;
-                        })()
-                      }, null, 2)}
-                    </pre>
-                  </div>
-                </div>
-              </details>
-            </div>
-          )} */}
 
           {/* Referral Code */}
           <div className="mb-6">
@@ -1716,27 +1644,16 @@ const OpenCurrencyAccount = () => {
               {infoType === "named" ? (
                 <>
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      A Named Account is a dedicated bank account issued in the
-                      customer's name. All transactions are processed directly
-                      through this account, allowing funds to be received and
-                      sent in the customer's own identity. This provides higher
-                      transparency, better reconciliation, and improved trust
-                      for business and high-volume customers.
+                  <p className="text-gray-700">
+                      {accountTypeDescriptions.named}
                     </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="bg-indigo-50 p-4 rounded-lg">
-                    <p className="text-gray-700">
-                      A Pooled Account is a shared account operated by the
-                      platform on behalf of multiple customers. Individual
-                      customer balances are maintained virtually within the
-                      system, while actual transactions are settled through the
-                      pooled account. This allows faster onboarding and
-                      efficient handling for customers who do not require a
-                      dedicated bank account.
+                  <p className="text-gray-700">
+                      {accountTypeDescriptions.pooled}
                     </p>
                   </div>
                 </>

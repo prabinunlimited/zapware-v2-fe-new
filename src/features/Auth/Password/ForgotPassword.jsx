@@ -47,6 +47,9 @@ import {
   setStep
 } from "./forgotPasswordActions";
 
+import Modal from "../../../components/PopupModal/Modal";
+import { closeModal, selectUI } from "../../Auth/slices/uiSlice";
+
 const USER_TYPE_MAP = [
   { key: "customer", apiKey: "user_is_customer", label: "Customer", icon: FaUser },
   { key: "beneficiary", apiKey: "user_is_beneficiary", label: "Beneficiary", icon: FaUserFriends },
@@ -80,6 +83,9 @@ const ForgotPassword = () => {
   const dynamicUserTypes = isMultiUserType
     ? USER_TYPE_MAP.filter((item) => apiResponse?.[item.apiKey] === 1)
     : [];
+
+  const ui = useSelector(selectUI);
+  const { modal = {} } = ui;
 
 
   useEffect(() => {
@@ -731,6 +737,25 @@ const ForgotPassword = () => {
           </motion.div>
         </motion.div>
       </div>
+      {/* ========== POPUP MODAL ========== */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={() => {
+          const isSuccess = modal.type === "success";
+          dispatch(closeModal());
+
+          if (isSuccess) {
+            // Password reset was successful -> redirect to login
+            dispatch(resetForgotPassword());
+            navigate("/");
+          }
+          // On any password error: it just closes the modal, leaving you on Step 3
+        }}
+        title={modal.title}
+        type={modal.type}
+        message={modal.message}
+        modalProps={modal.modalProps}
+      />
     </div>
   );
 };

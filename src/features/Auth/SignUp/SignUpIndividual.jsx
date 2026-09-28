@@ -308,7 +308,10 @@ const createValidationSchema = (shouldShowPurposeOfAccount) => {
 
     mobile_number: Yup.string()
       .required("Phone number is required")
-      .matches(/^\d{10}$/, "Phone number must be 10 digits"),
+      .matches(/^[1-9]/, "Phone number cannot start with 0")
+      .matches(/^\d+$/, "Phone number must contain only digits")
+      .min(5, "Phone number must be at least 5 digits")
+      .max(15, "Phone number cannot exceed 15 digits"),
 
     mobilenumber_countrycode: Yup.string().required("Country code is required"),
 
@@ -392,7 +395,7 @@ function SignUpIndividualContent() {
   // State declarations
   const [isClient, setIsClient] = useState(false);
   const [initializationError, setInitializationError] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [initialDataLoading, setInitialDataLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [registrationDataLoaded, setRegistrationDataLoaded] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -452,6 +455,20 @@ function SignUpIndividualContent() {
   const showPhoneVerificationInput = useSelector(selectShowPhoneVerificationInput);
   const isPhoneSendingCode = useSelector(selectIsPhoneSendingCode);
   const isPhoneVerifying = useSelector(selectIsPhoneVerifying);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    if (resendCountdown > 0) {
+      timer = setInterval(() => {
+        setResendCountdown((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [resendCountdown]);
 
   useEffect(() => {
     console.log("🔍 Selector Debug:", {
@@ -471,52 +488,54 @@ function SignUpIndividualContent() {
     accountOptions,
   ]);
 
-  useEffect(() => {
-    const fetchOccupations = async () => {
-      try {
-        setOccupationsLoading(true);
-
-        // Get the bearer token from localStorage
-        const bearertoken = localStorage.getItem("bearertoken");
-
-        console.log("🔄 Fetching occupations from:", `${API_URL}/customers/fetch-occupation`);
-
-        const response = await axios.get(`${API_URL}/customers/fetch-occupation`, {
-          headers: {
-            'Authorization': `Bearer ${bearertoken}`,
-            'Content-Type': 'application/json',
-          }
-        });
-
-        console.log("✅ API Response:", response.data);
-
-        // Extract the occupations array from response.data.data
-        if (response.data?.data && Array.isArray(response.data.data)) {
-          setOccupations(response.data.data);
-          console.log("✅ Occupations set:", response.data.data);
-        } else if (Array.isArray(response.data)) {
-          setOccupations(response.data);
-        } else {
-          console.warn("Unexpected response structure:", response.data);
-          setOccupations([]);
-        }
-
-      } catch (error) {
-        console.error("❌ Failed to fetch occupations:", error);
-        console.error("Error details:", error.response?.data || error.message);
-        setOccupations([]);
-      } finally {
-        setOccupationsLoading(false);
-      }
-    };
-
-    fetchOccupations();
-  }, []);
-
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
   const countryCodeRef = useRef("");
+  const formTopRef = useRef(null);
+
+  const emailVerificationRef = useRef(null);
+
+  const checkEmailVerifiedOrRedirect = () => {
+    if (!isEmailVerified) {
+      // Prevents multiple toasts from firing if one is already showing
+      if (!toast.isActive("email-verify-warning")) {
+        toast.error("Please verify your email address before proceeding to other fields!", {
+          toastId: "email-verify-warning",
+          autoClose: 5000,
+        });
+      }
+
+      if (emailVerificationRef.current) {
+        emailVerificationRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        emailVerificationRef.current.classList.add(
+          "ring-4",
+          "ring-red-500",
+          "bg-red-50/70",
+          "transition-all",
+          "duration-500"
+        );
+
+        setTimeout(() => {
+          emailVerificationRef.current?.classList.remove(
+            "ring-4",
+            "ring-red-500",
+            "bg-red-50/70"
+          );
+        }, 4500);
+
+        const targetElement = emailVerificationRef.current.querySelector(
+          'button, input[placeholder*="code"], input[type="email"]'
+        );
+        if (targetElement) {
+          targetElement.focus();
+        }
+      }
+      return false;
+    }
+    return true;
+  };
 
   // Redux selectors for location data
   const countries = useSelector(selectCountries) || [];
@@ -621,7 +640,7 @@ function SignUpIndividualContent() {
       showSSNField: showSSNField,
       isNamedAccount: isNamedAccount,
       selectedAccounts: selectedAccounts,
-      remit_customer: isRemit,
+      ...((isRemit === 1 || isRemit === "1" || isRemit === true) && { remit_customer: 1 }),
     },
     validationSchema: createValidationSchema(shouldShowPurposeOfAccount), // Use ONLY Yup validation
     validateOnBlur: true,
@@ -1080,7 +1099,7 @@ function SignUpIndividualContent() {
         referral_code: referral_code || "",
         agent_code: agent_code || "",
         hostname: window.location.hostname,
-        remit_customer: isRemit,
+        ...((isRemit === 1 || isRemit === "1" || isRemit === true) && { remit_customer: 1 }),
         bank_account_options: service_provide_ids,
         isPartnerPackageModule: isPartnerPackageModule || "N",
         packageselectedcurrencyids: JSON.parse(localStorage.getItem("packageselectedcurrencyids") || "[]"),
@@ -1127,7 +1146,7 @@ function SignUpIndividualContent() {
           setSuccessMessage(responseData.message || "Registration successful!");
           setIsSuccessModalOpen(true);
 
-          const resendMinutes = responseData.data?.resend_minutes ;
+          const resendMinutes = responseData.data?.resend_minutes;
           localStorage.setItem("otp_resend_minutes", resendMinutes);
 
           // Navigate to phone verification
@@ -1190,185 +1209,60 @@ function SignUpIndividualContent() {
   };
 
   // Initialize data
-  const initializedRef = useRef(false);
+  const initialLoadRef = useRef(false);
 
   useEffect(() => {
     setIsClient(true);
 
-    // Skip if already initialized
-    if (initializedRef.current) {
-      console.log("🔄 Already initialized, skipping");
-      setIsLoading(false);
+    // If already triggered once, do nothing and let the requests finish
+    if (initialLoadRef.current) {
       return;
     }
+    initialLoadRef.current = true;
 
-    let isMounted = true;
+    // Sync account status
+    dispatch(setMetadataField({ field: "hasNamedAccounts", value: isNamedAccount || false }));
+    dispatch(setMetadataField({ field: "isUSDSelected", value: isNamedAccount || false }));
+    dispatch(setMetadataField({ field: "isNamedAccount", value: isNamedAccount || false }));
 
     const initializeData = async () => {
       try {
-        if (isMounted) {
-          setIsLoading(true);
-          setInitializationError(null);
-        }
+        const bearertoken = localStorage.getItem("bearertoken");
 
-        console.log("🔍 [initializeData] Starting initialization", {
-          hasLocationState: !!location.state,
-          service_provide_ids: service_provide_ids,
-          accountOptions: locationAccountOptions,
-          isNamedAccount,
-        });
+        const primaryFetches = [
+          dispatch(fetchCountries()).unwrap().catch(() => []),
+          dispatch(fetchNationalities()).unwrap().catch(() => []),
+          dispatch(fetchIdDocumentTypes()).unwrap().catch(() => []),
+          dispatch(fetchTermsAndConditions()).unwrap().catch(() => []),
+          axios
+            .get(`${API_URL}/customers/fetch-occupation`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setOccupations(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setOccupations(res.data);
+              }
+            })
+            .catch(() => setOccupations([])),
+        ];
 
-        // Sync USD named account status to signupSlice for backward compatibility
-        dispatch(
-          setMetadataField({
-            field: "hasNamedAccounts",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        dispatch(
-          setMetadataField({
-            field: "isUSDSelected",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        // Sync isNamedAccount field for SSN logic
-        dispatch(
-          setMetadataField({
-            field: "isNamedAccount",
-            value: isNamedAccount || false,
-          }),
-        );
-
-        // Get partner token if needed
-        try {
-          console.log("🔄 Attempting to get partner token...");
-          const { getBearerToken } =
-            await import("../../../services/authService");
-          const token = await getBearerToken();
-          console.log("✅ Partner token obtained:", token ? "Yes" : "No");
-        } catch (tokenError) {
-          console.error("❌ Failed to get partner token:", tokenError.message);
-        }
-
-        // Check what data we need to fetch
-        const apiPromises = [];
-
-        if (countries.length === 0) {
-          apiPromises.push(
-            dispatch(fetchCountries())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ Countries fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Countries already loaded:", countries.length);
-        }
-
-        if (nationalities.length === 0) {
-          apiPromises.push(
-            dispatch(fetchNationalities())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ Nationalities fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Nationalities already loaded:", nationalities.length);
-        }
-
-        if (idDocumentTypes.length === 0) {
-          apiPromises.push(
-            dispatch(fetchIdDocumentTypes())
-              .unwrap()
-              .catch((error) => {
-                console.error("❌ ID Document Types fetch error:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log(
-            "✅ ID Document Types already loaded:",
-            idDocumentTypes.length,
-          );
-        }
-
-        if (!termsFetched) {
-          console.log("📡 Fetching terms and conditions...");
-          apiPromises.push(
-            dispatch(fetchTermsAndConditions())
-              .unwrap()
-              .then((terms) => {
-                console.log(
-                  "✅ Terms fetched successfully:",
-                  terms?.length || 0,
-                );
-                return terms;
-              })
-              .catch((error) => {
-                console.error("❌ Terms fetch error in component:", error);
-                return [];
-              }),
-          );
-        } else {
-          console.log("✅ Terms already fetched");
-        }
-
-        // Execute API calls if needed
-        if (apiPromises.length > 0) {
-          console.log("🚀 Executing", apiPromises.length, "API calls...");
-          const timeoutPromise = new Promise((resolve) =>
-            setTimeout(() => {
-              console.log("⏰ API timeout after 30 seconds");
-              resolve("timeout");
-            }, 30000),
-          );
-
-          const results = await Promise.race([
-            Promise.allSettled(apiPromises),
-            timeoutPromise,
-          ]);
-
-          if (results === "timeout") {
-            console.warn("⚠️ Some API calls timed out");
-          } else {
-            console.log("✅ All API calls completed:", results);
-          }
-        } else {
-          console.log("✅ No API calls needed - all data already loaded");
-        }
-
-        // Mark as initialized and finish loading
-        if (isMounted) {
-          initializedRef.current = true;
-          setIsLoading(false);
-          console.log("✅ Initialization complete");
-        }
+        // Wait until ALL 5 APIs have completely finished
+        await Promise.allSettled(primaryFetches);
       } catch (error) {
-        console.error("❌ Initialization error:", error);
-        if (isMounted) {
-          setInitializationError(error.message);
-          setIsLoading(false);
-        }
+        console.error("Initialization error:", error);
+      } finally {
+        // ONLY turn off loading once everything has finished
+        setInitialDataLoading(false);
       }
     };
 
-    // Run initialization if we have location state
-    if (location.state) {
-      initializeData();
-    } else {
-      setIsLoading(false);
-    }
-
-    // Cleanup function
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    initializeData();
+  }, [dispatch, isNamedAccount]);
 
   // Handle errors
   useEffect(() => {
@@ -1391,6 +1285,10 @@ function SignUpIndividualContent() {
       }
     };
   }, [zipDebounceTimer]);
+
+  useEffect(() => {
+    formTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [activeSection]);
 
   // Country change handler with state/city fetching
   const handleCountrySelect = async (selectedOption) => {
@@ -1519,7 +1417,7 @@ function SignUpIndividualContent() {
 
   // Phone number handler - NO DASHES
   const handlePhoneChange = (e) => {
-    const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+    const rawValue = e.target.value.replace(/\D/g, "").slice(0, 15);
     formik.setFieldValue("mobile_number", rawValue);
   };
 
@@ -1656,7 +1554,11 @@ function SignUpIndividualContent() {
     try {
       const result = await dispatch(sendEmailVerificationPasscode(email));
       if (sendEmailVerificationPasscode.fulfilled.match(result)) {
-        toast.success("Verification code sent to your email!");
+        toast.success(result.payload?.message || "Verification code sent to your email!");
+
+        // Extract resend_minutes from response and start countdown
+        const resendMinutes = result.payload?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
       } else {
         toast.error(result.payload || "Failed to send verification code");
       }
@@ -1699,8 +1601,54 @@ function SignUpIndividualContent() {
     }
   };
 
-  const handleResendCode = () => {
-    handleSendVerificationCode();
+  const handleResendCode = async () => {
+    if (resendCountdown > 0 || isResending) return;
+
+    const email = formik.values.email;
+    if (!email || formik.errors.email) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+
+    const partnerIdStr = localStorage.getItem("whitelabelledpartnerid");
+    const partnerId = partnerIdStr ? parseInt(partnerIdStr, 10) : null;
+
+    const payload = {
+      request_user_email: email,
+      request_user_type: "customer",
+      partner_id: partnerId,
+    };
+
+    try {
+      setIsResending(true);
+      const token = localStorage.getItem("bearertoken");
+
+      const response = await axios.post(
+        `${API_URL}/resend-passcode-registration`,
+        payload,
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        }
+      );
+
+      if (response.data?.status === "success" || response.status === 200) {
+        toast.success(response.data?.message || "Passcode resent successfully!");
+        const resendMinutes = response.data?.data?.resend_minutes ?? 1;
+        setResendCountdown(resendMinutes * 60);
+      } else {
+        toast.error(response.data?.message || "Failed to resend passcode");
+      }
+    } catch (error) {
+      console.error("Resend passcode error:", error);
+      toast.error(
+        error.response?.data?.message || "An error occurred while resending the code."
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
 
   // Phone Verification Handlers
@@ -2060,13 +2008,13 @@ function SignUpIndividualContent() {
     );
   }
 
-  if (isLoading) {
+  if (!isClient || initialDataLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <div className="max-w-4xl w-full bg-white p-8 rounded-xl shadow-lg text-center flex flex-col items-center">
-          <RingLoader color="#3b82f6" size={50} />
-          <p className="mt-4 text-gray-600">Loading registration form...</p>
-        </div>
+      <div className="fixed inset-0 bg-white z-[60] flex flex-col justify-center items-center">
+        <RingLoader color="#3b82f6" size={60} loading={true} />
+        <p className="mt-4 text-gray-600 font-medium text-lg">
+          Loading registration form...
+        </p>
       </div>
     );
   }
@@ -2100,7 +2048,7 @@ function SignUpIndividualContent() {
             ></div>
           </div>
 
-          <div className="p-6 md:p-8">
+          <div className="p-6 md:p-8" ref={formTopRef}>
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 space-y-4 md:space-y-0">
               <div className="flex items-start sm:items-center space-x-3 sm:space-x-4">
@@ -2175,6 +2123,11 @@ function SignUpIndividualContent() {
                       key={idx}
                       type="button"
                       onClick={() => {
+                        // Block jumping to contact, ID, security, terms tabs if unverified
+                        if (idx > 0 && !checkEmailVerifiedOrRedirect()) {
+                          return;
+                        }
+
                         // Only allow navigation if previous sections are valid
                         let canNavigate = true;
                         for (let i = 0; i < idx; i++) {
@@ -2221,11 +2174,36 @@ function SignUpIndividualContent() {
                 })}
               </div>
             </div>
+
+            {/* Form */}
             {/* Form */}
             <form
               onSubmit={formik.handleSubmit}
               className="space-y-6"
               noValidate
+              onFocusCapture={(e) => {
+                if (isEmailVerified) return;
+
+                const allowedInitialFields = [
+                  "first_name",
+                  "middle_name",
+                  "last_name",
+                  "dob",
+                  "email"
+                ];
+
+                const isTargetAllowed =
+                  allowedInitialFields.includes(e.target.id) ||
+                  allowedInitialFields.includes(e.target.name) ||
+                  emailVerificationRef.current?.contains(e.target);
+
+                if (!isTargetAllowed) {
+                  e.preventDefault();
+                  e.stopPropagation(); // Stops event bubbling to parent containers
+                  e.target.blur();
+                  checkEmailVerifiedOrRedirect();
+                }
+              }}
             >
               {/* Add verification banners here - after form opening tag */}
               {/* {registrationDataLoaded && (
@@ -2347,56 +2325,73 @@ function SignUpIndividualContent() {
                       ) : null}
                     </div>
                   ))}
-                  {/* Email Field with Verification */}
-                  <div className="relative">
+                  {/* Unified Email & OTP Verification Container */}
+                  <div ref={emailVerificationRef} className="relative rounded-xl p-1 transition-all duration-300">
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2.5">
                       Email Address *
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <div className="flex-1 relative">
                         <input
                           id="email"
                           name="email"
                           type="email"
                           placeholder="your.email@example.com"
-                          onChange={formik.handleChange}
+                          onChange={(e) => {
+                            formik.handleChange(e);
+                            if (isEmailVerified) {
+                              dispatch(resetEmailVerification());
+                            }
+                          }}
                           onBlur={formik.handleBlur}
                           value={formik.values.email}
-                          // disabled={isEmailVerified}
+                          disabled={false}
                           className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 
-            ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
-            ${formik.touched.email && formik.errors.email && !isEmailVerified
+          ${isEmailVerified ? 'bg-green-50 border-green-300' : ''}
+          ${formik.touched.email && formik.errors.email && !isEmailVerified
                               ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
                               : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                             } shadow-sm`}
                         />
                       </div>
 
-                      {/* Verify Button - Only show when not verified */}
+                      {/* Verify / Resend Button */}
                       {!isEmailVerified && (
                         <button
                           type="button"
-                          onClick={handleSendVerificationCode}
-                          disabled={isSendingCode || !formik.values.email || formik.errors.email}
-                          className="px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                          onClick={showVerificationInput ? handleResendCode : handleSendVerificationCode}
+                          disabled={
+                            isSendingCode ||
+                            isResending ||
+                            !formik.values.email ||
+                            Boolean(formik.errors.email) ||
+                            (showVerificationInput && resendCountdown > 0)
+                          }
+                          className="w-full sm:w-auto px-4 py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap min-w-[95px] flex items-center justify-center"
                         >
-                          {isSendingCode ? (
+                          {isSendingCode || isResending ? (
                             <div className="flex items-center gap-2">
                               <RingLoader size={16} color="#ffffff" />
                               <span>Sending...</span>
                             </div>
+                          ) : showVerificationInput ? (
+                            resendCountdown > 0 ? `Resend (${resendCountdown}s)` : "Resend"
                           ) : (
-                            'Verify'
+                            "Verify"
                           )}
                         </button>
                       )}
 
-                      {/* Verified Badge - Show when verified instead of button */}
+                      {/* Verified Badge */}
                       {isEmailVerified && (
-                        <div className="px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center gap-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => dispatch(resetEmailVerification())}
+                          className="w-full sm:w-auto px-4 py-3.5 bg-green-100 text-green-700 rounded-xl flex items-center justify-center gap-2 whitespace-nowrap hover:bg-green-200"
+                        >
                           <FontAwesomeIcon icon={faCheckCircle} className="text-green-600" />
                           <span className="font-medium">Verified</span>
-                        </div>
+                        </button>
                       )}
                     </div>
 
@@ -2409,71 +2404,75 @@ function SignUpIndividualContent() {
                         {formik.errors.email}
                       </p>
                     )}
-                  </div>
 
-                  {/* Verification Code Input (shown after clicking Verify) */}
-                  {showVerificationInput && !isEmailVerified && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Enter Verification Code
-                      </label>
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            value={emailVerification.verificationCode}
-                            onChange={handleVerificationCodeChange}
-                            placeholder="Enter 6-digit code"
-                            maxLength={6}
-                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
-                          />
+                    {/* Verification Code Input (Moved INSIDE this div) */}
+                    {showVerificationInput && !isEmailVerified && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Enter Verification Code
+                        </label>
+                        <div className="flex gap-2">
+                          <div className="flex-1">
+                            <input
+                              type="text"
+                              value={emailVerification.verificationCode}
+                              onChange={handleVerificationCodeChange}
+                              placeholder="Enter 6-digit code"
+                              maxLength={6}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm text-center text-lg tracking-wider"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleVerifyEmailCode}
+                            disabled={isVerifying || !emailVerification.verificationCode || emailVerification.verificationCode.length !== 6}
+                            className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
+                          >
+                            {isVerifying ? (
+                              <div className="flex items-center gap-2">
+                                <RingLoader size={16} color="#ffffff" />
+                                <span>Verifying...</span>
+                              </div>
+                            ) : (
+                              'Submit'
+                            )}
+                          </button>
                         </div>
-                        <button
-                          type="button"
-                          onClick={handleVerifyEmailCode}
-                          disabled={isVerifying || !emailVerification.verificationCode || emailVerification.verificationCode.length !== 6}
-                          className="px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 whitespace-nowrap"
-                        >
-                          {isVerifying ? (
-                            <div className="flex items-center gap-2">
-                              <RingLoader size={16} color="#ffffff" />
-                              <span>Verifying...</span>
-                            </div>
-                          ) : (
-                            'Submit'
-                          )}
-                        </button>
+
+                        {/* Resend link with countdown */}
+                        <div className="mt-3 text-center">
+                          <button
+                            type="button"
+                            onClick={handleResendCode}
+                            disabled={isResending || resendCountdown > 0}
+                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {isResending
+                              ? "Sending..."
+                              : resendCountdown > 0
+                                ? `Didn't receive code? Resend in ${resendCountdown}s`
+                                : "Didn't receive code? Resend"}
+                          </button>
+                        </div>
+
+                        {/* Error message */}
+                        {emailVerification.error && (
+                          <p className="text-red-500 text-xs mt-3 flex items-center">
+                            <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
+                            {emailVerification.error}
+                          </p>
+                        )}
+
+                        {/* Success message */}
+                        {emailVerification.success && !isEmailVerified && (
+                          <p className="text-green-600 text-xs mt-3 flex items-center">
+                            <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
+                            {emailVerification.success}
+                          </p>
+                        )}
                       </div>
-
-                      {/* Resend link */}
-                      <div className="mt-3 text-center">
-                        <button
-                          type="button"
-                          onClick={handleResendCode}
-                          disabled={isSendingCode}
-                          className="text-sm text-blue-600 hover:text-blue-700 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isSendingCode ? 'Sending...' : "Didn't receive code? Resend"}
-                        </button>
-                      </div>
-
-                      {/* Error message */}
-                      {emailVerification.error && (
-                        <p className="text-red-500 text-xs mt-3 flex items-center">
-                          <FontAwesomeIcon icon={faExclamationCircle} className="mr-1" />
-                          {emailVerification.error}
-                        </p>
-                      )}
-
-                      {/* Success message */}
-                      {emailVerification.success && !isEmailVerified && (
-                        <p className="text-green-600 text-xs mt-3 flex items-center">
-                          <FontAwesomeIcon icon={faCheckCircle} className="mr-1" />
-                          {emailVerification.success}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   <div>
                     <label
@@ -3191,7 +3190,7 @@ function SignUpIndividualContent() {
                               id="mobile_number"
                               name="mobile_number"
                               onChange={(e) => {
-                                const rawValue = e.target.value.replace(/\D/g, "").slice(0, 10);
+                                const rawValue = e.target.value.replace(/\D/g, "").slice(0, 15);
                                 formik.setFieldValue("mobile_number", rawValue);
                                 // Reset phone verification when number changes
                                 // if (isPhoneVerified) {
@@ -3214,7 +3213,7 @@ function SignUpIndividualContent() {
                                   : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                                 } shadow-sm`}
                               placeholder="9813017273"
-                              maxLength={10}
+                              maxLength={15}
                             />
                           </div>
 
@@ -3292,8 +3291,8 @@ function SignUpIndividualContent() {
                           </button>
                         </div> */}
 
-                        {/* Resend link */}
-                        {/* <div className="mt-3 text-center">
+                    {/* Resend link */}
+                    {/* <div className="mt-3 text-center">
                           <button
                             type="button"
                             onClick={handleResendPhoneCode}
@@ -3304,16 +3303,16 @@ function SignUpIndividualContent() {
                           </button>
                         </div> */}
 
-                        {/* Success message */}
-                        {/* {phoneVerification?.success && !isPhoneVerified && (
+                    {/* Success message */}
+                    {/* {phoneVerification?.success && !isPhoneVerified && (
                           <p className="text-green-600 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faCheckCircle} className="text-green-500" />
                             {phoneVerification.success}
                           </p>
                         )} */}
 
-                        {/* Error message */}
-                        {/* {phoneVerification?.error && (
+                    {/* Error message */}
+                    {/* {phoneVerification?.error && (
                           <p className="text-red-500 text-sm mt-2 flex items-center justify-center gap-1.5">
                             <FontAwesomeIcon icon={faExclamationCircle} className="text-red-500" />
                             {typeof phoneVerification.error === 'string'
@@ -3321,9 +3320,15 @@ function SignUpIndividualContent() {
                               : phoneVerification.error?.message || 'Verification failed'}
                           </p>
                         )} */}
-                      </div>
-                    {/* )} */}
+                  </div>
+                  {/* )} */}
                   {/* </div> */}
+
+                  {/* Note below the phone number section */}
+                  <p className="text-xs text-amber-600 mt-2 flex items-center font-medium">
+                    <FontAwesomeIcon icon={faExclamationCircle} className="mr-1.5 text-amber-500" />
+                    Please double-check your phone number before proceeding.
+                  </p>
                 </div>
 
                 <div className="flex flex-col-reverse sm:flex-row justify-between mt-10 gap-3">

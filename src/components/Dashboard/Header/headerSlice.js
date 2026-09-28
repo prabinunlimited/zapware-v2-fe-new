@@ -93,6 +93,7 @@ export const fetchUserProfile = createAsyncThunk(
         localStorage.setItem("firstName", profile.first_name);
         localStorage.setItem("lastName", profile.last_name);
         localStorage.setItem("middleName", profile.middle_name || "");
+        localStorage.setItem("countryId", profile.country_id ?? "");
         return profile;
       } else {
         throw new Error("Failed to fetch profile - non-success status");
