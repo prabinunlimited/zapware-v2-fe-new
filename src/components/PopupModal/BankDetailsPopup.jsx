@@ -173,8 +173,8 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
   return (
     <>
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[80vh] overflow-hidden m-2 sm:m-0">
-          <div className="p-6">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] sm:max-h-[80vh] overflow-hidden m-2 sm:m-0 flex flex-col">
+          <div className="p-6 flex flex-col min-h-0 flex-1">
             <div className="flex justify-between items-center mb-3 sm:mb-4">
               <h2 className="text-base sm:text-xl font-bold text-gray-900 truncate pr-2">
                 Bank Details for {beneficiaryName}
@@ -261,7 +261,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
               </div>
             ) : (
               <>
-                <div className="space-y-3 sm:space-y-4 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto pr-1 sm:pr-2">
+                <div className="space-y-3 sm:space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 sm:pr-2">
                   {bankDetails.map((bank, index) => (
                     <div
                       key={bank.id || index}
@@ -571,7 +571,7 @@ function BankDetailsPopup({ beneficiaryId, beneficiaryName, onClose, customerId 
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 flex-shrink-0">
                   <button
                     onClick={handleAddNewBank}
                     className="px-4 py-2.5 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto text-sm sm:text-base order-2 sm:order-1"

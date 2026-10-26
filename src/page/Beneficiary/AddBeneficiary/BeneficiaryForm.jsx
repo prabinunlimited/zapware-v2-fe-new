@@ -2665,6 +2665,26 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           )}
         </div>
 
+        {/* Account Type (optional, all currencies) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
+          <div className="mb-4">
+            <FieldLabel>Account Type</FieldLabel>
+            <select
+              className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+              value={account.accountType || ""}
+              onChange={(e) =>
+                handleBankAccountChange(index, "accountType", e.target.value)
+              }
+            >
+              <option value="">Select Account Type</option>
+              <option value="Business Savings">Business Savings</option>
+              <option value="Business Checkings">Business Checkings</option>
+              <option value="Personal Checkings">Personal Checkings</option>
+              <option value="Personal Savings">Personal Savings</option>
+            </select>
+          </div>
+        </div>
+
         {/* Currency-Specific ID Fields */}
         {(accountCurrency === "BDT" ||
           accountCurrency === "INR" ||
@@ -2932,36 +2952,6 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     ))}
                   </select>
                 </div>
-
-                {account.paymentMethod === "ACH" && (
-                  <div className="mb-4">
-                    <FieldLabel required>
-                      Account Type
-                    </FieldLabel>
-                    <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                      value={account.accountType || ""}
-                      onChange={(e) =>
-                        handleBankAccountChange(
-                          index,
-                          "accountType",
-                          e.target.value
-                        )
-                      }
-                      required
-                    >
-                      <option value="">Select Account Type</option>
-                      <option value="Business Savings">Business Savings</option>
-                      <option value="Business Checkings">
-                        Business Checkings
-                      </option>
-                      <option value="Personal Checkings">
-                        Personal Checkings
-                      </option>
-                      <option value="Personal Savings">Personal Savings</option>
-                    </select>
-                  </div>
-                )}
               </div>
             )}
 
