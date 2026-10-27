@@ -535,6 +535,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     "DKK",
     "SEK",
     "EUR",
+    "BDT",
+    "BIF",
+    "RWF",
     "GBP",
     "INR",
     "KES",
@@ -679,6 +682,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       state: initialData?.state || "",
       city: initialData?.city || "",
       street: initialData?.street || "",
+      building_no: initialData?.building_no || "",
       postalcode: initialData?.postalcode || "",
       relationtobenef: initialData?.relationtobenef || "",
       otherRelationship: initialData?.otherRelationship || "",
@@ -832,6 +836,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         state: beneficiaryDetails.state || "",
         city: beneficiaryDetails.city || "",
         street: beneficiaryDetails.street || "",
+        building_no: beneficiaryDetails.building_no || "",
         postalcode: beneficiaryDetails.postalcode || "",
         relationtobenef: beneficiaryDetails.relationtobenef || "",
         otherRelationship: beneficiaryDetails.otherRelationship || "",
@@ -1288,6 +1293,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           state: beneficiaryData.state || "",
           city: beneficiaryData.city || "",
           street: beneficiaryData.street || "",
+          building_no: beneficiaryData.building_no || "",
           postalcode: beneficiaryData.postalcode || "",
           relationtobenef: relationshipValue || "",
           otherRelationship: beneficiaryData.otherRelationship || "",
@@ -1985,6 +1991,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       state: formik.values.state,
       city: formik.values.city,
       street: formik.values.street,
+      building_no: formik.values.building_no || "",
       postalcode: formik.values.postalcode,
       relationtobenef: finalRelationship,
       nationality_id: formik.values.nationality_id,
@@ -2955,91 +2962,119 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
               </div>
             )}
 
-            {/* INR Local Transfer */}
-            {accountCurrency === "INR" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Bank Name
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter Bank Name"
-                    value={account.bankName || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(index, "bankName", e.target.value)
-                    }
-                    required
-                  />
-                </div>
+            {/* INR, RWF, BIF Local Transfers */}
+            {(accountCurrency === "INR" ||
+              accountCurrency === "RWF" ||
+              accountCurrency === "BIF") && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bank Name - common to INR, RWF, BIF */}
+                  <div className="mb-4">
+                    <FieldLabel required>Bank Name</FieldLabel>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                      placeholder="Enter Bank Name"
+                      value={account.bankName || ""}
+                      onChange={(e) =>
+                        handleBankAccountChange(index, "bankName", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
 
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Account Number
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter Account Number"
-                    value={account.accountNumber || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(
-                        index,
-                        "accountNumber",
-                        e.target.value
-                      )
-                    }
-                    required
-                  />
-                </div>
+                  {/* Account Number - common to INR, RWF, BIF */}
+                  <div className="mb-4">
+                    <FieldLabel required>Account Number</FieldLabel>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                      placeholder="Enter Account Number"
+                      value={account.accountNumber || ""}
+                      onChange={(e) =>
+                        handleBankAccountChange(
+                          index,
+                          "accountNumber",
+                          e.target.value
+                        )
+                      }
+                      required
+                    />
+                  </div>
 
-                <div className="mb-4">
-                  <FieldLabel required info="Indian Financial System Code">
-                    IFSC Code
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter IFSC Code"
-                    value={account.ifsc || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(index, "ifsc", e.target.value)
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Bank Country
-                  </FieldLabel>
-                  <Select
-                    className="text-sm"
-                    classNamePrefix="select"
-                    options={countries.map(country => ({
-                      value: country.id.toString(),
-                      label: country.name
-                    }))}
-                    placeholder="Search and select bank country..."
-                    isSearchable
-                    value={
-                      account.bankCountry
-                        ? {
-                          value: account.bankCountry,
-                          label: countries.find(c => c.id.toString() === account.bankCountry)?.name || account.bankCountry
+                  {/* IFSC Code - INR ONLY (Hidden for RWF and BIF) */}
+                  {accountCurrency === "INR" && (
+                    <div className="mb-4">
+                      <FieldLabel required info="Indian Financial System Code">
+                        IFSC Code
+                      </FieldLabel>
+                      <input
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                        placeholder="Enter IFSC Code"
+                        value={account.ifsc || ""}
+                        onChange={(e) =>
+                          handleBankAccountChange(index, "ifsc", e.target.value)
                         }
-                        : null
-                    }
-                    onChange={(selectedOption) => {
-                      handleBankAccountChange(index, "bankCountry", selectedOption?.value || "");
-                    }}
-                    styles={customStyles}
-                    required
-                  />
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* SWIFT / BIC Code - RWF & BIF ONLY */}
+                  {(accountCurrency === "RWF" || accountCurrency === "BIF") && (
+                    <div className="mb-4">
+                      <FieldLabel required info="Bank Identifier Code">
+                        SWIFT/BIC Code
+                      </FieldLabel>
+                      <input
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                        placeholder="Enter SWIFT/BIC code"
+                        value={account.swift || ""}
+                        onChange={(e) =>
+                          handleBankAccountChange(index, "swift", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Bank Country - common to INR, RWF, BIF */}
+                  <div className="mb-4">
+                    <FieldLabel required>Bank Country</FieldLabel>
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={countries.map((country) => ({
+                        value: country.id.toString(),
+                        label: country.name,
+                      }))}
+                      placeholder="Search and select bank country..."
+                      isSearchable
+                      value={
+                        account.bankCountry
+                          ? {
+                            value: account.bankCountry,
+                            label:
+                              countries.find(
+                                (c) => c.id.toString() === account.bankCountry
+                              )?.name || account.bankCountry,
+                          }
+                          : null
+                      }
+                      onChange={(selectedOption) => {
+                        handleBankAccountChange(
+                          index,
+                          "bankCountry",
+                          selectedOption?.value || ""
+                        );
+                      }}
+                      styles={customStyles}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* EUR Local Transfer */}
             {accountCurrency === "EUR" && (
@@ -4740,6 +4775,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                         : "bg-white"
                         }`}
                       placeholder="Enter street address"
+                      disabled={usingExistingBeneficiary}
+                      readOnly={usingExistingBeneficiary}
+                    />
+                  </div>
+
+                  {/* Building No (Optional) */}
+                  <div>
+                    <FieldLabel required={false}>
+                      Building No
+                      {usingExistingBeneficiary && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          (Pre-filled - Cannot Edit)
+                        </span>
+                      )}
+                    </FieldLabel>
+                    <input
+                      id="building_no"
+                      name="building_no"
+                      type="text"
+                      value={formik.values.building_no}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : "bg-white"
+                        }`}
+                      placeholder="Enter building number (optional)"
                       disabled={usingExistingBeneficiary}
                       readOnly={usingExistingBeneficiary}
                     />
