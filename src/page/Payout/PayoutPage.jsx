@@ -764,6 +764,8 @@ const PayoutPage = () => {
       GBP: ["bank"],
       EUR: ["bank"],
       DKK: ["bank"],
+      RWF: ["swift", "bank"],
+      BIF: ["swift", "bank"],
     };
 
     return payoutMethodsByCurrency[currency] || [];
