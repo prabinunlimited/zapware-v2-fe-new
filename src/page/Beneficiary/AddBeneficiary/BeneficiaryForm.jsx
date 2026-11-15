@@ -1057,12 +1057,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return cities[formik.values.country_id] || [];
   };
 
+  const isIndia = useMemo(() => {
+    if (currency === "INR") return true;
+    const selected = countries.find(
+      (c) => c.id?.toString() === formik.values.country_id?.toString()
+    );
+    return (
+      selected?.name?.toLowerCase() === "india" ||
+      selected?.country_code === "IN"
+    );
+  }, [currency, formik.values.country_id, countries]);
+
   const isFormValid = useCallback(() => {
     if (formik.values.beneftype === "") return false;
 
     if (
       formik.values.name === "" ||
-      // formik.values.country_id === "" ||
       formik.values.country_phone_code === "" ||
       formik.values.phone_number === "" ||
       formik.values.city === "" ||
@@ -1070,22 +1080,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     )
       return false;
 
-    // if (formik.values.beneftype === "individual") {
-    //   if (formik.values.relationtobenef === "") return false;
-    // }
-
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+    // Only validate ID Type/Number for BDT/PKR when not India
+    if ((currency === "BDT" || currency === "PKR") && !isIndia) {
       if (
         formik.values.beneficiary_id_type === "" ||
         formik.values.beneficiary_id_number === ""
       )
         return false;
-
-      if (currency === "INR" && formik.values.city === "") return false;
     }
 
+    if (currency === "INR" && formik.values.city === "") return false;
+
     return true;
-  }, [formik.values, currency]);
+  }, [formik.values, currency, isIndia]);
 
   const handleCurrencyChange = async (e) => {
     const newCurrency = e.target.value;
@@ -1627,16 +1634,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           toast.error(`Street Required for Currency: ${currency}`);
           return false;
         }
-        const idTypeInput = formik.values.beneficiary_id_type;
-        if (idTypeInput === "" || idTypeInput === " ") {
-          toast.error(`ID Type Required for Currency: ${currency}`);
-          return false;
-        }
+        // Only enforce ID type & ID number if NOT India / INR
+        if (currency !== "INR" && !isIndia) {
+          const idTypeInput = formik.values.beneficiary_id_type;
+          if (idTypeInput === "" || idTypeInput === " ") {
+            toast.error(`ID Type Required for Currency: ${currency}`);
+            return false;
+          }
 
-        const idNumber = formik.values.beneficiary_id_number;
-        if (idNumber === "" || idNumber === " ") {
-          toast.error(`ID Number Required for Currency: ${currency}`);
-          return false;
+          const idNumber = formik.values.beneficiary_id_number;
+          if (idNumber === "" || idNumber === " ") {
+            toast.error(`ID Number Required for Currency: ${currency}`);
+            return false;
+          }
         }
 
         if (currency === "INR") {
@@ -1953,8 +1963,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         return;
       }
 
-      // Currency-specific validations
-      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+      // Currency-specific validations (excluded when India / INR)
+      if ((currency === "BDT" || currency === "PKR") && !isIndia) {
         if (!formik.values.beneficiary_id_type) {
           toast.error("Beneficiary ID Type is required");
           setLoading(false);
@@ -2698,7 +2708,10 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           accountCurrency === "PKR") && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="mb-4">
-                <FieldLabel required info="Required for regulatory compliance">
+                <FieldLabel
+                  required={accountCurrency !== "INR" && !isIndia}
+                  info={accountCurrency !== "INR" && !isIndia ? "Required for regulatory compliance" : null}
+                >
                   Beneficiary ID Type
                   {usingExistingBeneficiary && (
                     <span className="ml-1 text-xs text-green-600">(Fill for this account)</span>
@@ -2709,7 +2722,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   value={formik.values.beneficiary_id_type}
                   onChange={formik.handleChange}
                   name="beneficiary_id_type"
-                  required
+                  required={accountCurrency !== "INR" && !isIndia}
                 >
                   <option value="">Select ID Type</option>
                   {currentIdTypes.map((idType) => (
@@ -2722,8 +2735,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <div className="mb-4">
                 <FieldLabel
-                  required
-                  info="Enter the ID number exactly as on the document"
+                  required={accountCurrency !== "INR" && !isIndia}
+                  info={accountCurrency !== "INR" && !isIndia ? "Enter the ID number exactly as on the document" : null}
                 >
                   Beneficiary ID Number
                   {usingExistingBeneficiary && (
@@ -2737,7 +2750,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   value={formik.values.beneficiary_id_number}
                   onChange={formik.handleChange}
                   name="beneficiary_id_number"
-                  required
+                  required={accountCurrency !== "INR" && !isIndia}
                 />
               </div>
             </div>
@@ -4871,7 +4884,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <>
                       <div>
-                        <FieldLabel required>
+                        <FieldLabel required={currency !== "INR" && !isIndia}>
                           {formik.values.beneftype === "institution" ? "Company ID Type" : "Beneficiary ID Type"}
                           {usingExistingBeneficiary && (
                             <span className="ml-2 text-xs text-gray-500">
@@ -4885,11 +4898,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             value={formik.values.beneficiary_id_type}
                             onChange={formik.handleChange}
                             name="beneficiary_id_type"
-                            required
+                            required={currency !== "INR" && !isIndia}
                           >
                             <option value="">Select ID Type</option>
                             {getIdTypesForCurrency.map((idType) => (
-                              <option key={idType.id} value={idType.name}>
+                              <option key={idType.id || idType.name} value={idType.name}>
                                 {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
                               </option>
                             ))}
@@ -4901,7 +4914,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </div>
 
                       <div>
-                        <FieldLabel required>
+                        <FieldLabel required={currency !== "INR" && !isIndia}>
                           {formik.values.beneftype === "institution" ? "Company ID Number" : "Beneficiary ID Number"}
                           {usingExistingBeneficiary && (
                             <span className="ml-2 text-xs text-gray-500">
@@ -4916,7 +4929,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           value={formik.values.beneficiary_id_number}
                           onChange={formik.handleChange}
                           name="beneficiary_id_number"
-                          required
+                          required={currency !== "INR" && !isIndia}
                         />
                       </div>
                     </>

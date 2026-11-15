@@ -750,7 +750,7 @@ const PayoutPage = () => {
       USD: ["swift", "bank"],
       AUD: ["swift", "bank"],
       NPR: ["bank"],
-      INR: ["bank"],
+      INR: ["bank", "upi"],
       CAD: ["bank"],
       KES: ["bank"],
       AED: ["bank"],
@@ -1106,7 +1106,7 @@ const PayoutPage = () => {
                     </option>
                     {availableTransactionTypes.map((method) => (
                       <option key={method} value={method}>
-                        {method.charAt(0).toUpperCase() + method.slice(1)}
+                        {method === "upi" ? "UPI" : method.charAt(0).toUpperCase() + method.slice(1)}
                       </option>
                     ))}
                   </select>
