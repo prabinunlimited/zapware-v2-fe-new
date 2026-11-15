@@ -1941,8 +1941,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           }
         }
       }
-    } else {
-      // Original validation for new beneficiary (non-existing)
+    } else if (mode === "create" || editBankOnlyMode || isAddBankOnlyMode) {
+      // Only validate bank accounts when creating a beneficiary or editing/adding bank details
       const isRailsMissing = bankAccounts.some((account) => !account.rails);
       if (isRailsMissing) {
         console.log("❌ DEBUG - Early return due to missing rails");
