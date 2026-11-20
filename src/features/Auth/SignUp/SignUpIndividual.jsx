@@ -188,9 +188,14 @@ const getSectionFields = (sectionIndex, values, shouldShowPurposeOfAccount) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "taxType",
+        "taxId",
       ];
       if (values.idDocumentType === "other") {
         idFields.push("idDocumentTypeOther");
+      }
+      if (values.taxType === "other") {
+        idFields.push("taxTypeOther");
       }
 
       // Only add SSN to required fields if it should be shown
@@ -245,6 +250,8 @@ const getSectionRequiredFields = (sectionIndex) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "taxType",
+        "taxId",
       ];
 
     case 3: // Security
@@ -320,6 +327,21 @@ const createValidationSchema = (shouldShowPurposeOfAccount) => {
         .required("Purpose of account is required")
         .min(3, "Please provide more detail")
       : Yup.string().notRequired(),
+
+    taxType: Yup.string().required("Tax Type is required"),
+
+    taxTypeOther: Yup.string().when("taxType", {
+      is: "other",
+      then: (schema) =>
+        schema
+          .required("Please specify tax type")
+          .min(2, "Tax type must be at least 2 characters"),
+      otherwise: (schema) => schema.notRequired(),
+    }),
+
+    taxId: Yup.string()
+      .required("Tax ID is required")
+      .min(2, "Tax ID must be at least 2 characters"),
 
     // Update the SSN validation in createValidationSchema()
     ssn: Yup.string().test(
@@ -440,6 +462,9 @@ function SignUpIndividualContent() {
   const [occupations, setOccupations] = useState([]);
   const [occupationsLoading, setOccupationsLoading] = useState(false);
   const [selectedOccupation, setSelectedOccupation] = useState(null);
+
+  const [taxIdTypes, setTaxIdTypes] = useState([]);
+  const [taxIdTypesLoading, setTaxIdTypesLoading] = useState(false);
 
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
   const [monthlyExpectedActivity, setMonthlyExpectedActivity] = useState("");
@@ -633,6 +658,9 @@ function SignUpIndividualContent() {
       idIssuedDate: "",
       idIssuedCountryCode: "",
       idDocumentTypeOther: "",
+      taxType: "",
+      taxTypeOther: "",
+      taxId: "",
       accept_sms: 0,
       accept_privacy_policy: 0,
       accept_disclosure: 0,
@@ -1095,6 +1123,9 @@ function SignUpIndividualContent() {
         idIssuedDate: values.idIssuedDate,
         idIssuedCountryCode: values.idIssuedCountryCode,
         idDocumentTypeOther: values.idDocumentTypeOther || "",
+        tax_id_type_id: values.taxType === "other" ? null : Number(values.taxType),
+        tax_id_type_other: values.taxType === "other" ? values.taxTypeOther : "",
+        tax_id: values.taxId,
         service_providers: service_provide_ids,
         referral_code: referral_code || "",
         agent_code: agent_code || "",
@@ -1229,6 +1260,8 @@ function SignUpIndividualContent() {
       try {
         const bearertoken = localStorage.getItem("bearertoken");
 
+        setTaxIdTypesLoading(true);
+
         const primaryFetches = [
           dispatch(fetchCountries()).unwrap().catch(() => []),
           dispatch(fetchNationalities()).unwrap().catch(() => []),
@@ -1249,6 +1282,22 @@ function SignUpIndividualContent() {
               }
             })
             .catch(() => setOccupations([])),
+          axios
+            .get(`${API_URL}/tax-id-types`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setTaxIdTypes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setTaxIdTypes(res.data);
+              }
+            })
+            .catch(() => setTaxIdTypes([]))
+            .finally(() => setTaxIdTypesLoading(false)),
         ];
 
         // Wait until ALL 5 APIs have completely finished
@@ -3680,6 +3729,177 @@ function SignUpIndividualContent() {
                           {formik.errors.idIssuedDate}
                         </p>
                       )}
+                  </div>
+                  {/* 1. Tax Type Dropdown (Always Column 1) */}
+                  <div>
+                    <label
+                      htmlFor="taxType"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Tax Type *
+                    </label>
+
+                    {taxIdTypesLoading ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <RingLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">Loading tax types...</span>
+                      </div>
+                    ) : (
+                      <Select
+                        id="taxType"
+                        name="taxType"
+                        menuPortalTarget={document.body}
+                        menuPosition="fixed"
+                        options={[
+                          ...taxIdTypes.map((type) => ({
+                            value: type.id ?? type.code ?? type.name,
+                            label: type.name || type.label || type.code,
+                          })),
+                          { value: "other", label: "Other" },
+                        ]}
+                        onChange={(selectedOption) => {
+                          const selectedValue = selectedOption?.value ?? "";
+                          formik.setFieldValue("taxType", selectedValue);
+                          if (selectedValue !== "other") {
+                            formik.setFieldValue("taxTypeOther", "");
+                          }
+                        }}
+                        onBlur={() => formik.setFieldTouched("taxType", true)}
+                        value={
+                          [
+                            ...taxIdTypes.map((type) => ({
+                              value: type.id ?? type.code ?? type.name,
+                              label: type.name || type.label || type.code,
+                            })),
+                            { value: "other", label: "Other" },
+                          ].find((option) => option.value === formik.values.taxType) || null
+                        }
+                        className="basic-single"
+                        classNamePrefix="select"
+                        placeholder="Select Tax Type"
+                        styles={{
+                          ...customStyles,
+                          menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                          control: (provided, state) => ({
+                            ...provided,
+                            minHeight: "52px",
+                            borderRadius: "12px",
+                            borderColor:
+                              formik.touched.taxType && formik.errors.taxType
+                                ? "#f87171"
+                                : "#e5e7eb",
+                            boxShadow: state.isFocused
+                              ? formik.touched.taxType && formik.errors.taxType
+                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
+                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                              : "none",
+                            "&:hover": {
+                              borderColor:
+                                formik.touched.taxType && formik.errors.taxType
+                                  ? "#ef4444"
+                                  : "#3b82f6",
+                            },
+                          }),
+                        }}
+                      />
+                    )}
+
+                    {formik.touched.taxType && formik.errors.taxType && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.taxType}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Conditional "Other" Tax Type Input (Sits to the right of Tax Type in Column 2) */}
+                  {formik.values.taxType === "other" && (
+                    <div>
+                      <label
+                        htmlFor="taxTypeOther"
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        Specify Tax Type *
+                      </label>
+                      <input
+                        type="text"
+                        id="taxTypeOther"
+                        name="taxTypeOther"
+                        value={formik.values.taxTypeOther}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        placeholder="Specify tax type"
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.taxTypeOther && formik.errors.taxTypeOther
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                      />
+                      {formik.touched.taxTypeOther && formik.errors.taxTypeOther && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.taxTypeOther}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. Tax ID Input (Sits beside Tax Type by default; shifts to next row below when "Other" is active) */}
+                  <div>
+                    <label
+                      htmlFor="taxId"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Tax ID *
+                    </label>
+                    <input
+                      type="text"
+                      id="taxId"
+                      name="taxId"
+                      value={formik.values.taxId}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      placeholder="Enter your Tax ID"
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.taxId && formik.errors.taxId
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.taxId && formik.errors.taxId && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.taxId}
+                      </p>
+                    )}
                   </div>
                 </div>
 

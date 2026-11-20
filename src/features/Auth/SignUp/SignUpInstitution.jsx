@@ -128,6 +128,9 @@ import {
   fetchRegions,
   selectRegions,
   selectRegionsLoading,
+  fetchTaxIdTypes,
+  selectTaxIdTypes,
+  selectTaxIdTypesLoading,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -529,6 +532,9 @@ const Institution = () => {
   const regions = useSelector(selectRegions);
   const regionsLoading = useSelector(selectRegionsLoading);
 
+  const taxIdTypes = useSelector(selectTaxIdTypes);
+  const taxIdTypesLoading = useSelector(selectTaxIdTypesLoading);
+
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
@@ -706,6 +712,8 @@ const Institution = () => {
       annual_equivalent_amount: mergedData.annual_equivalent_amount || "",
       business_website_social_media: mergedData.business_website_social_media || "",
       trust_purpose: mergedData.trust_purpose || "",
+      tax_id_type_id: mergedData.tax_id_type_id || "",
+      tax_id_type_other: mergedData.tax_id_type_other || "",
       tax_id: mergedData.tax_id || "",
 
       registered_business_address_apartment_unit_no: mergedData.registered_business_address_apartment_unit_no || "",
@@ -1520,6 +1528,7 @@ const Institution = () => {
         dispatch(fetchTransactionCurrencies()),
         dispatch(fetchOccupation()),
         dispatch(fetchRegions()),
+        dispatch(fetchTaxIdTypes()),
       ];
 
       const secondaryFetches = new Promise((resolve) => {
@@ -1745,6 +1754,8 @@ const Institution = () => {
             "trading_names_list",
             "business_website_social_media",
             "trust_purpose",
+            "tax_id_type_id",
+            "tax_id_type_other",
             "tax_id",
             "business_model_overview",
             "business_size",
@@ -2490,6 +2501,13 @@ const Institution = () => {
           no_of_trading_names: values.no_of_trading_names || 0,
           trading_names_list: values.trading_names_list?.filter(name => name && name.trim() !== "") || [],
           trust_purpose: finalFormData.trust_purpose || "",
+          tax_id_type_id:
+            finalFormData.tax_id_type_id === "other" || !finalFormData.tax_id_type_id
+              ? null
+              : Number(finalFormData.tax_id_type_id),
+          ...(finalFormData.tax_id_type_id === "other" && finalFormData.tax_id_type_other
+            ? { tax_id_type_other: finalFormData.tax_id_type_other }
+            : {}),
           tax_id: finalFormData.tax_id || "",
 
           isPartnerPackageModule: isPartnerPackageModule,
@@ -4349,6 +4367,8 @@ const Institution = () => {
               trading_names_list: 'trading_names_list',
               business_website_social_media: 'business_website_social_media',
               trust_purpose: 'trust_purpose',
+              tax_id_type_id: 'tax_id_type_id',
+              tax_id_type_other: 'tax_id_type_other',
               tax_id: 'tax_id',
               business_model_overview: 'business_model_overview',
               business_size: 'business_size',
@@ -4973,24 +4993,139 @@ const Institution = () => {
                         })()
                       )}
 
-                      <div className="mt-2">
-                        <RequiredFormField
-                          id="tax_id"
-                          label="Tax ID "
-                          name="tax_id"
-                          value={values.tax_id || ""}
-                          onChange={enhancedHandleChange("tax_id", setFieldValue)}
-                          onBlur={handleBlur}
-                          onFocus={() => setActiveField("tax_id")}
-                          touched={touched.tax_id}
-                          error={errors.tax_id}
-                          placeholder="XX-XXXXXXX or Tax Registration Number"
-                          activeField={activeField}
-                          fieldStyles={FIELD_STYLES}
-                        />
-                        {/* <p className="text-xs text-gray-500 mt-1">
-                            Enter your Tax ID (EIN for US entities, TRN for other countries)
-                          </p> */}
+                      {/* Tax Type, Optional "Other", and Tax ID */}
+                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                        {/* 1. Tax Type Dropdown (Always Column 1) */}
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="tax_id_type_id"
+                            className="block text-sm font-medium text-gray-700"
+                          >
+                            Tax Type
+                            <RequiredMark fieldName="tax_id_type_id" />
+                          </label>
+                          <Select
+                            inputId="tax_id_type_id"
+                            name="tax_id_type_id"
+                            menuPortalTarget={document.body}
+                            menuPosition="fixed"
+                            isLoading={taxIdTypesLoading}
+                            options={[
+                              ...taxIdTypes.map((type) => ({
+                                value: type.id ?? type.code ?? type.name,
+                                label: type.name || type.label || type.code,
+                              })),
+                              { value: "other", label: "Other" },
+                            ]}
+                            value={
+                              [
+                                ...taxIdTypes.map((type) => ({
+                                  value: type.id ?? type.code ?? type.name,
+                                  label: type.name || type.label || type.code,
+                                })),
+                                { value: "other", label: "Other" },
+                              ].find(
+                                (opt) =>
+                                  String(opt.value) === String(values.tax_id_type_id)
+                              ) || null
+                            }
+                            onChange={(option) => {
+                              const val = option?.value ?? "";
+                              setFieldValue("tax_id_type_id", val);
+                              setLocalFormData((prev) => ({
+                                ...prev,
+                                tax_id_type_id: val,
+                                ...(val !== "other" ? { tax_id_type_other: "" } : {}),
+                              }));
+                              dispatch(setFormField({ field: "tax_id_type_id", value: val }));
+                              if (val !== "other") {
+                                setFieldValue("tax_id_type_other", "");
+                                dispatch(setFormField({ field: "tax_id_type_other", value: "" }));
+                              }
+                            }}
+                            onBlur={handleBlur}
+                            placeholder={
+                              taxIdTypesLoading ? "Loading tax types..." : "Select Tax Type..."
+                            }
+                            styles={{
+                              control: (base) => ({
+                                ...base,
+                                minHeight: "50px",
+                                borderColor:
+                                  touched.tax_id_type_id && errors.tax_id_type_id
+                                    ? "#ef4444"
+                                    : "#d1d5db",
+                                borderRadius: "0.5rem",
+                                padding: "0.25rem 0.5rem",
+                                fontSize: "0.875rem",
+                                "&:hover": {
+                                  borderColor:
+                                    touched.tax_id_type_id && errors.tax_id_type_id
+                                      ? "#ef4444"
+                                      : "#9ca3af",
+                                },
+                              }),
+                              placeholder: (base) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                color: "#6b7280",
+                              }),
+                              menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                              option: (base, state) => ({
+                                ...base,
+                                fontSize: "0.875rem",
+                                backgroundColor: state.isSelected
+                                  ? "#3b82f6"
+                                  : state.isFocused
+                                    ? "#eff6ff"
+                                    : "white",
+                                color: state.isSelected ? "white" : "#1f2937",
+                              }),
+                            }}
+                          />
+                          {touched.tax_id_type_id && errors.tax_id_type_id && (
+                            <div className="text-red-500 text-xs mt-1 flex items-center">
+                              <FontAwesomeIcon icon={faInfoCircle} className="mr-1 w-3 h-3" />
+                              {errors.tax_id_type_id}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 2. Conditional "Other" Input (Sits to the right of Tax Type in Column 2) */}
+                        {values.tax_id_type_id === "other" && (
+                          <RequiredFormField
+                            id="tax_id_type_other"
+                            label="Specify Tax Type"
+                            name="tax_id_type_other"
+                            value={values.tax_id_type_other || ""}
+                            onChange={enhancedHandleChange("tax_id_type_other", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("tax_id_type_other")}
+                            touched={touched.tax_id_type_other}
+                            error={errors.tax_id_type_other}
+                            placeholder="Enter tax type"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        )}
+
+                        {/* 3. Tax ID (Sits beside Tax Type by default; drops below when "Other" is active) */}
+                        <div>
+                          <RequiredFormField
+                            id="tax_id"
+                            label="Tax ID"
+                            name="tax_id"
+                            value={values.tax_id || ""}
+                            onChange={enhancedHandleChange("tax_id", setFieldValue)}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("tax_id")}
+                            touched={touched.tax_id}
+                            error={errors.tax_id}
+                            placeholder="Enter your Tax ID"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
+                          />
+                        </div>
                       </div>
 
                       {/* NEW: PEP Associated Field */}
