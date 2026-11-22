@@ -465,6 +465,10 @@ function SignUpIndividualContent() {
   const [occupationsLoading, setOccupationsLoading] = useState(false);
   const [selectedOccupation, setSelectedOccupation] = useState(null);
 
+  const [iscoCodes, setIscoCodes] = useState([]);
+  const [iscoCodesLoading, setIscoCodesLoading] = useState(false);
+  const [selectedIscoCode, setSelectedIscoCode] = useState(null);
+
   const [taxIdTypes, setTaxIdTypes] = useState([]);
   const [taxIdTypesLoading, setTaxIdTypesLoading] = useState(false);
 
@@ -651,6 +655,7 @@ function SignUpIndividualContent() {
       customer_sending_countries: [],
       customer_receiving_funds_countries: [],
       occupation: "",
+      isco_code_id: "",
       purpose_of_account: "",
       monthly_expected_activity: "",
       dob: "",
@@ -908,7 +913,12 @@ function SignUpIndividualContent() {
 
   const handleOccupationChange = (selectedOption) => {
     setSelectedOccupation(selectedOption);
-    formik.setFieldValue("occupation", selectedOption?.label || "");
+    formik.setFieldValue("occupation", selectedOption?.value || "");
+  };
+
+  const handleIscoCodeChange = (selectedOption) => {
+    setSelectedIscoCode(selectedOption);
+    formik.setFieldValue("isco_code_id", selectedOption?.value || "");
   };
 
   // Handle purpose of account change
@@ -1116,7 +1126,8 @@ function SignUpIndividualContent() {
         gender: values.gender,
         customer_sending_countries: values.customer_sending_countries,
         customer_receiving_funds_countries: values.customer_receiving_funds_countries,
-        occupation: values.occupation || "",
+        occupation: values.occupation ? Number(values.occupation) : "",
+        isco_code_id: values.isco_code_id ? Number(values.isco_code_id) : "",
         purpose_of_account: values.purpose_of_account || "",
         monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
@@ -1286,6 +1297,22 @@ function SignUpIndividualContent() {
               }
             })
             .catch(() => setOccupations([])),
+          axios
+            .get(`${API_URL}/isco-codes`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setIscoCodes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setIscoCodes(res.data);
+              }
+            })
+            .catch(() => setIscoCodes([]))
+            .finally(() => setIscoCodesLoading(false)),
           axios
             .get(`${API_URL}/tax-id-types`, {
               headers: {
@@ -2716,7 +2743,7 @@ function SignUpIndividualContent() {
                         id="occupation"
                         name="occupation"
                         options={occupations.map(occ => ({
-                          value: occ.name,
+                          value: occ.id,
                           label: occ.name
                         }))}
                         onChange={handleOccupationChange}
@@ -2727,6 +2754,37 @@ function SignUpIndividualContent() {
                         isClearable={true}
                         styles={customStyles}
                         value={selectedOccupation}
+                      />
+                    )}
+                  </div>
+
+                  {/* Occupation Code (ISCO) */}
+                  <div>
+                    <label htmlFor="isco_code_id" className="block text-sm font-medium text-gray-700 mb-2.5">
+                      Occupation Code (ISCO)
+                    </label>
+
+                    {iscoCodesLoading ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <RingLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">Loading ISCO codes...</span>
+                      </div>
+                    ) : (
+                      <Select
+                        id="isco_code_id"
+                        name="isco_code_id"
+                        options={iscoCodes.map((item) => ({
+                          value: item.id,
+                          label: item.name || item.title || item.description || String(item.id),
+                        }))}
+                        onChange={handleIscoCodeChange}
+                        onBlur={formik.handleBlur}
+                        className="basic-single"
+                        classNamePrefix="select"
+                        placeholder="Select ISCO code"
+                        isClearable={true}
+                        styles={customStyles}
+                        value={selectedIscoCode}
                       />
                     )}
                   </div>
@@ -3726,9 +3784,9 @@ function SignUpIndividualContent() {
                       onBlur={formik.handleBlur}
                       placeholder="Enter issuing state/province"
                       className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.document_issue_state &&
-                          formik.errors.document_issue_state
-                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
-                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        formik.errors.document_issue_state
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
                         } shadow-sm`}
                     />
                     {formik.touched.document_issue_state &&

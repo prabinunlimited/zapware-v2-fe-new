@@ -131,6 +131,9 @@ import {
   fetchTaxIdTypes,
   selectTaxIdTypes,
   selectTaxIdTypesLoading,
+  fetchIscoCodes,
+  selectIscoCodes,
+  selectIscoCodesLoading,
 } from "../slices/institutionRegistrationSlice";
 
 import {
@@ -535,6 +538,9 @@ const Institution = () => {
   const taxIdTypes = useSelector(selectTaxIdTypes);
   const taxIdTypesLoading = useSelector(selectTaxIdTypesLoading);
 
+  const iscoCodes = useSelector(selectIscoCodes);
+  const iscoCodesLoading = useSelector(selectIscoCodesLoading);
+
   // ADD THESE STATE VARIABLES:
   const [zipDebounceTimer, setZipDebounceTimer] = useState(null);
   const [isZipLoading, setIsZipLoading] = useState(false);
@@ -685,6 +691,7 @@ const Institution = () => {
       employees_number: mergedData.employees_number || "",
 
       responsible_person_occupation: mergedData.responsible_person_occupation || "",
+      isco_code_id: mergedData.isco_code_id || "",
 
       // New business payment fields
       business_model_overview: mergedData.business_model_overview || "",
@@ -1530,6 +1537,7 @@ const Institution = () => {
         dispatch(fetchOccupation()),
         dispatch(fetchRegions()),
         dispatch(fetchTaxIdTypes()),
+        dispatch(fetchIscoCodes()),
       ];
 
       const secondaryFetches = new Promise((resolve) => {
@@ -1828,6 +1836,7 @@ const Institution = () => {
             "dob",
             "designation",
             "responsible_person_occupation",
+            "isco_code_id",
             "doc_type",
             "doc_id",
             "doc_country",
@@ -2522,6 +2531,7 @@ const Institution = () => {
           packageselectedcurrencyids: packageselectedcurrencyids,
 
           responsiblePersonOccupation: finalFormData.responsible_person_occupation || "",
+          isco_code_id: finalFormData.isco_code_id ? Number(finalFormData.isco_code_id) : "",
 
           // CONVERT STATE IDS TO NAMES - ADD THESE LINES (around line 1680-1690):
           registered_address_street_state: findStateName(finalFormData.registered_address_street_state),
@@ -2954,6 +2964,14 @@ const Institution = () => {
       label: occ.name || occ.occupation_name || occ.title,
     }));
   }, [occupations]);
+
+  const iscoCodeOptions = useMemo(() => {
+    if (!iscoCodes || !Array.isArray(iscoCodes)) return [];
+    return iscoCodes.map((item) => ({
+      value: item.id,
+      label: item.name || item.title || item.description || String(item.id),
+    }));
+  }, [iscoCodes]);
 
   const regionOptions = useMemo(() => {
     if (!regions || !Array.isArray(regions)) return [];
@@ -4439,6 +4457,7 @@ const Institution = () => {
               dob: 'dob',
               designation: 'designation',
               responsible_person_occupation: 'responsible_person_occupation',
+              isco_code_id: 'isco_code_id',
               doc_type: 'doc_type',
               doc_id: 'doc_id',
               doc_country: 'doc_country',
@@ -7307,6 +7326,18 @@ const Institution = () => {
                             error={errors.responsible_person_occupation}
                             isLoading={occupationLoading}
                             placeholder="Select occupation..."
+                          />
+
+                          <RequiredCustomSelect
+                            id="isco_code_id"
+                            label="Occupation Code (ISCO)"
+                            options={iscoCodeOptions}
+                            onChange={enhancedSelectChange("isco_code_id", setFieldValue)}
+                            value={iscoCodeOptions.find(opt => opt.value === values.isco_code_id)}
+                            touched={touched.isco_code_id}
+                            error={errors.isco_code_id}
+                            isLoading={iscoCodesLoading}
+                            placeholder="Select ISCO code..."
                           />
 
                           {/* ID Document Type and ID Document Number on same row */}
