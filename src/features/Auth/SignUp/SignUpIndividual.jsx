@@ -188,6 +188,7 @@ const getSectionFields = (sectionIndex, values, shouldShowPurposeOfAccount) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "documentIssueState",
         "taxType",
         "taxId",
       ];
@@ -250,6 +251,7 @@ const getSectionRequiredFields = (sectionIndex) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "documentIssueState",
         "taxType",
         "taxId",
       ];
@@ -657,6 +659,7 @@ function SignUpIndividualContent() {
       idDocumentNumber: "",
       idIssuedDate: "",
       idIssuedCountryCode: "",
+      document_issue_state: "",
       idDocumentTypeOther: "",
       taxType: "",
       taxTypeOther: "",
@@ -1118,10 +1121,11 @@ function SignUpIndividualContent() {
         monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
-        idDocumentType: values.idDocumentType,
+        document_id: values.idDocumentType === "other" ? null : Number(values.idDocumentType),
         idDocumentNumber: values.idDocumentNumber,
         idIssuedDate: values.idIssuedDate,
         idIssuedCountryCode: values.idIssuedCountryCode,
+        document_issue_state: values.document_issue_state || "",
         idDocumentTypeOther: values.idDocumentTypeOther || "",
         tax_id_type_id: values.taxType === "other" ? null : Number(values.taxType),
         tax_id_type_other: values.taxType === "other" ? values.taxTypeOther : "",
@@ -3531,7 +3535,7 @@ function SignUpIndividualContent() {
                         {idDocumentTypes.map((docType, index) => (
                           <option
                             key={docType.id ?? `${docType.name}-${index}`}
-                            value={docType.name}
+                            value={docType.id ?? docType.name}
                           >
                             {docType.name}
                           </option>
@@ -3702,6 +3706,46 @@ function SignUpIndividualContent() {
                             />
                           </svg>
                           {formik.errors.idIssuedCountryCode}
+                        </p>
+                      )}
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="document_issue_state"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      ID Issuing State
+                    </label>
+                    <input
+                      type="text"
+                      id="document_issue_state"
+                      name="document_issue_state"
+                      value={formik.values.document_issue_state}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      placeholder="Enter issuing state/province"
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.document_issue_state &&
+                          formik.errors.document_issue_state
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.document_issue_state &&
+                      formik.errors.document_issue_state && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.document_issue_state}
                         </p>
                       )}
                   </div>

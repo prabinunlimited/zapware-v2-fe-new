@@ -715,6 +715,7 @@ const Institution = () => {
       tax_id_type_id: mergedData.tax_id_type_id || "",
       tax_id_type_other: mergedData.tax_id_type_other || "",
       tax_id: mergedData.tax_id || "",
+      document_issue_state: mergedData.document_issue_state || "",
 
       registered_business_address_apartment_unit_no: mergedData.registered_business_address_apartment_unit_no || "",
       registered_business_address_suburb: mergedData.registered_business_address_suburb || "",
@@ -1830,6 +1831,8 @@ const Institution = () => {
             "doc_type",
             "doc_id",
             "doc_country",
+            "document_issue_state",
+            "id_issue_state",
             "id_issued_date",
             "terms_and_conditions",
           ];
@@ -2075,6 +2078,11 @@ const Institution = () => {
     if ("terms_and_conditions" in payload) {
       payload.terms = payload.terms_and_conditions;
       delete payload.terms_and_conditions;
+    }
+
+    if ("doc_type" in payload) {
+      payload.document_id = payload.doc_type;
+      delete payload.doc_type;
     }
 
     const controllerFieldMap = {
@@ -2631,9 +2639,10 @@ const Institution = () => {
             director_role_id: finalFormData.director_role_id || "",
           }],
 
-          doc_type: finalFormData.doc_type,
+          document_id: finalFormData.doc_type,
           doc_id: finalFormData.doc_id,
           doc_state: finalFormData.doc_state,
+          document_issue_state: finalFormData.document_issue_state || "",
           // isPartnerPackageModule: institutionState.partnerPackageModule || "N",
           package_currencies: packageCurrencies,
           whitelabelledpartnerid: institutionState.whiteLabelledPartnerId,
@@ -4433,6 +4442,7 @@ const Institution = () => {
               doc_type: 'doc_type',
               doc_id: 'doc_id',
               doc_country: 'doc_country',
+              document_issue_state: 'document_issue_state',
               id_issued_date: 'id_issued_date',
               terms_and_conditions: 'terms',
 
@@ -7345,6 +7355,23 @@ const Institution = () => {
                             isLoading={countriesLoading}
                             isCountryField={true}
                             showPhoneCode={false}
+                          />
+                          <RequiredFormField
+                            id="document_issue_state"
+                            label="ID Issuing State"
+                            name="document_issue_state"
+                            value={values.document_issue_state || ""}
+                            onChange={enhancedHandleChange(
+                              "document_issue_state",
+                              setFieldValue,
+                            )}
+                            onBlur={handleBlur}
+                            onFocus={() => setActiveField("document_issue_state")}
+                            touched={touched.document_issue_state}
+                            error={errors.document_issue_state}
+                            placeholder="Enter issuing state/province"
+                            activeField={activeField}
+                            fieldStyles={FIELD_STYLES}
                           />
                           <RequiredFormField
                             id="id_issued_date"
