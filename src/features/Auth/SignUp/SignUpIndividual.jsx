@@ -19,6 +19,7 @@ import ErrorModal from "../../../components/PopupModal/ErrorModal";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 import RegistrationLayout from "../../../components/ProgressBar/RegistrationLayout";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
+import { fetchIndustryTypes, selectIndustryTypes } from '../slices/institutionRegistrationSlice';
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
@@ -472,6 +473,12 @@ function SignUpIndividualContent() {
   const [taxIdTypes, setTaxIdTypes] = useState([]);
   const [taxIdTypesLoading, setTaxIdTypesLoading] = useState(false);
 
+  const [sourceOfIncomes, setSourceOfIncomes] = useState([]);
+  const [sourceOfIncomesLoading, setSourceOfIncomesLoading] = useState(false);
+
+  const [employmentStatuses, setEmploymentStatuses] = useState([]);
+  const [employmentStatusesLoading, setEmploymentStatusesLoading] = useState(false);
+
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
   const [monthlyExpectedActivity, setMonthlyExpectedActivity] = useState("");
 
@@ -587,6 +594,8 @@ function SignUpIndividualContent() {
 
   const zipLookup = useSelector(selectZipLookup);
 
+  const industryTypes = useSelector(selectIndustryTypes) || [];
+
   // Extract location state with defaults
   const locationState = location.state || {};
   console.log("📥 LOCATION STATE RECEIVED:", {
@@ -656,6 +665,11 @@ function SignUpIndividualContent() {
       customer_receiving_funds_countries: [],
       occupation: "",
       isco_code_id: "",
+      industry_type: "",
+      source_of_income_id: "",
+      source_of_income_other: "",
+      employment_status_id: "",
+      employer_name: "",
       purpose_of_account: "",
       monthly_expected_activity: "",
       dob: "",
@@ -921,6 +935,22 @@ function SignUpIndividualContent() {
     formik.setFieldValue("isco_code_id", selectedOption?.value || "");
   };
 
+  const handleIndustryTypeChange = (selectedOption) => {
+    formik.setFieldValue("industry_type", selectedOption?.value ?? "");
+  };
+
+  const handleSourceOfIncomeChange = (selectedOption) => {
+    const selectedValue = selectedOption?.value ?? "";
+    formik.setFieldValue("source_of_income_id", selectedValue);
+    if (selectedValue !== "other") {
+      formik.setFieldValue("source_of_income_other", "");
+    }
+  };
+
+  const handleEmploymentStatusChange = (selectedOption) => {
+    formik.setFieldValue("employment_status_id", selectedOption?.value ?? "");
+  };
+
   // Handle purpose of account change
   const handlePurposeOfAccountChange = (e) => {
     const value = e.target.value;
@@ -1128,6 +1158,19 @@ function SignUpIndividualContent() {
         customer_receiving_funds_countries: values.customer_receiving_funds_countries,
         occupation: values.occupation ? Number(values.occupation) : "",
         isco_code_id: values.isco_code_id ? Number(values.isco_code_id) : "",
+        industry_type: values.industry_type ? Number(values.industry_type) : "",
+        source_of_income_id:
+          values.source_of_income_id === "other" || !values.source_of_income_id
+            ? null
+            : Number(values.source_of_income_id),
+        source_of_income_other:
+          values.source_of_income_id === "other"
+            ? values.source_of_income_other || ""
+            : "",
+        employment_status_id: values.employment_status_id
+          ? Number(values.employment_status_id)
+          : "",
+        employer_name: values.employer_name || "",
         purpose_of_account: values.purpose_of_account || "",
         monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
@@ -1276,12 +1319,15 @@ function SignUpIndividualContent() {
         const bearertoken = localStorage.getItem("bearertoken");
 
         setTaxIdTypesLoading(true);
+        setSourceOfIncomesLoading(true);
+        setEmploymentStatusesLoading(true);
 
         const primaryFetches = [
           dispatch(fetchCountries()).unwrap().catch(() => []),
           dispatch(fetchNationalities()).unwrap().catch(() => []),
           dispatch(fetchIdDocumentTypes()).unwrap().catch(() => []),
           dispatch(fetchTermsAndConditions()).unwrap().catch(() => []),
+          dispatch(fetchIndustryTypes()).unwrap().catch(() => []),
           axios
             .get(`${API_URL}/customers/fetch-occupation`, {
               headers: {
@@ -1313,6 +1359,38 @@ function SignUpIndividualContent() {
             })
             .catch(() => setIscoCodes([]))
             .finally(() => setIscoCodesLoading(false)),
+          axios
+            .get(`${API_URL}/fetch-income`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setSourceOfIncomes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setSourceOfIncomes(res.data);
+              }
+            })
+            .catch(() => setSourceOfIncomes([]))
+            .finally(() => setSourceOfIncomesLoading(false)),
+          axios
+            .get(`${API_URL}/employment-status`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setEmploymentStatuses(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setEmploymentStatuses(res.data);
+              }
+            })
+            .catch(() => setEmploymentStatuses([]))
+            .finally(() => setEmploymentStatusesLoading(false)),
           axios
             .get(`${API_URL}/tax-id-types`, {
               headers: {
@@ -2727,66 +2805,249 @@ function SignUpIndividualContent() {
                     </div>
                   )}
 
-                  {/* Occupation */}
-                  <div>
-                    <label htmlFor="occupation" className="block text-sm font-medium text-gray-700 mb-2.5">
+                  {/* Occupation Group */}
+                  <div className="md:col-span-2 pb-6 border-b border-gray-200">
+                    <h4 className="text-base font-semibold text-blue-600 mb-3 pb-1 border-b border-gray-200">
                       Occupation
-                    </label>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Occupation */}
+                      <div>
+                        <label
+                          htmlFor="occupation"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Occupation
+                        </label>
 
-                    {occupationsLoading ? (
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <RingLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">Loading occupations...</span>
+                        {occupationsLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">Loading occupations...</span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="occupation"
+                            name="occupation"
+                            options={occupations.map((occ) => ({
+                              value: occ.id,
+                              label: occ.name,
+                            }))}
+                            onChange={handleOccupationChange}
+                            onBlur={formik.handleBlur}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select your occupation"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={selectedOccupation}
+                          />
+                        )}
                       </div>
-                    ) : (
-                      <Select
-                        id="occupation"
-                        name="occupation"
-                        options={occupations.map(occ => ({
-                          value: occ.id,
-                          label: occ.name
-                        }))}
-                        onChange={handleOccupationChange}
-                        onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select your occupation"
-                        isClearable={true}
-                        styles={customStyles}
-                        value={selectedOccupation}
-                      />
-                    )}
-                  </div>
 
-                  {/* Occupation Code (ISCO) */}
-                  <div>
-                    <label htmlFor="isco_code_id" className="block text-sm font-medium text-gray-700 mb-2.5">
-                      Occupation Code (ISCO)
-                    </label>
+                      {/* Occupation Code (ISCO) */}
+                      <div>
+                        <label
+                          htmlFor="isco_code_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Occupation Code (ISCO)
+                        </label>
 
-                    {iscoCodesLoading ? (
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <RingLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">Loading ISCO codes...</span>
+                        {iscoCodesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">Loading ISCO codes...</span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="isco_code_id"
+                            name="isco_code_id"
+                            options={iscoCodes.map((item) => ({
+                              value: item.id,
+                              label:
+                                item.name || item.title || item.description || String(item.id),
+                            }))}
+                            onChange={handleIscoCodeChange}
+                            onBlur={formik.handleBlur}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select ISCO code"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={selectedIscoCode}
+                          />
+                        )}
                       </div>
-                    ) : (
-                      <Select
-                        id="isco_code_id"
-                        name="isco_code_id"
-                        options={iscoCodes.map((item) => ({
-                          value: item.id,
-                          label: item.name || item.title || item.description || String(item.id),
-                        }))}
-                        onChange={handleIscoCodeChange}
-                        onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select ISCO code"
-                        isClearable={true}
-                        styles={customStyles}
-                        value={selectedIscoCode}
-                      />
-                    )}
+
+                      {/* Source of Income */}
+                      <div>
+                        <label
+                          htmlFor="source_of_income_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Source of Income
+                        </label>
+
+                        {sourceOfIncomesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">
+                              Loading sources of income...
+                            </span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="source_of_income_id"
+                            name="source_of_income_id"
+                            options={[
+                              ...sourceOfIncomes.map((item) => ({
+                                value: item.id,
+                                label: item.name || item.title || String(item.id),
+                              })),
+                              { value: "other", label: "Other" },
+                            ]}
+                            onChange={handleSourceOfIncomeChange}
+                            onBlur={() => formik.setFieldTouched("source_of_income_id", true)}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select source of income"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={
+                              [
+                                ...sourceOfIncomes.map((item) => ({
+                                  value: item.id,
+                                  label: item.name || item.title || String(item.id),
+                                })),
+                                { value: "other", label: "Other" },
+                              ].find((opt) => opt.value === formik.values.source_of_income_id) ||
+                              null
+                            }
+                          />
+                        )}
+                      </div>
+
+                      {/* Conditional Source of Income (Other) */}
+                      {formik.values.source_of_income_id === "other" && (
+                        <div>
+                          <label
+                            htmlFor="source_of_income_other"
+                            className="block text-sm font-medium text-gray-700 mb-2.5"
+                          >
+                            Specify Source of Income
+                          </label>
+                          <input
+                            id="source_of_income_other"
+                            name="source_of_income_other"
+                            type="text"
+                            placeholder="Specify your source of income"
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            value={formik.values.source_of_income_other}
+                            className="w-full px-4 py-3.5 border border-gray-200 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                          />
+                        </div>
+                      )}
+
+                      {/* Employment Status */}
+                      <div>
+                        <label
+                          htmlFor="employment_status_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Employment Status
+                        </label>
+
+                        {employmentStatusesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">
+                              Loading employment status...
+                            </span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="employment_status_id"
+                            name="employment_status_id"
+                            options={employmentStatuses.map((item) => ({
+                              value: item.id,
+                              label: item.name || item.title || String(item.id),
+                            }))}
+                            onChange={handleEmploymentStatusChange}
+                            onBlur={() => formik.setFieldTouched("employment_status_id", true)}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select employment status"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={
+                              employmentStatuses
+                                .map((item) => ({
+                                  value: item.id,
+                                  label: item.name || item.title || String(item.id),
+                                }))
+                                .find(
+                                  (opt) => opt.value === formik.values.employment_status_id,
+                                ) || null
+                            }
+                          />
+                        )}
+                      </div>
+
+                      {/* Employer Name */}
+                      <div>
+                        <label
+                          htmlFor="employer_name"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Employer Name
+                        </label>
+                        <input
+                          id="employer_name"
+                          name="employer_name"
+                          type="text"
+                          placeholder="Enter your employer name"
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.employer_name}
+                          className="w-full px-4 py-3.5 border border-gray-200 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                        />
+                      </div>
+
+                      {/* Industry Type */}
+                      <div>
+                        <label
+                          htmlFor="industry_type"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Industry Type
+                        </label>
+                        <Select
+                          id="industry_type"
+                          name="industry_type"
+                          options={industryTypes.map((item) => ({
+                            value: item.id,
+                            label: item.name || item.title || item.label || String(item.id),
+                          }))}
+                          onChange={handleIndustryTypeChange}
+                          onBlur={() => formik.setFieldTouched("industry_type", true)}
+                          className="basic-single"
+                          classNamePrefix="select"
+                          placeholder="Select industry type"
+                          isClearable={true}
+                          styles={customStyles}
+                          value={
+                            industryTypes
+                              .map((item) => ({
+                                value: item.id,
+                                label: item.name || item.title || item.label || String(item.id),
+                              }))
+                              .find((opt) => opt.value === formik.values.industry_type) || null
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Monthly Expected Activity - Text Field */}
