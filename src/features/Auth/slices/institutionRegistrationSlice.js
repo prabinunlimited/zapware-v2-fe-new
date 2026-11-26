@@ -743,6 +743,68 @@ export const fetchRegions = createAsyncThunk(
   }
 );
 
+export const fetchTaxIdTypes = createAsyncThunk(
+  "institutionRegistration/fetchTaxIdTypes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/tax-id-types");
+
+      if (response.data?.status === "success" && response.data?.data) {
+        return Array.isArray(response.data.data)
+          ? response.data.data
+          : response.data.data.lists || [];
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch tax ID types"
+      );
+    }
+  }
+);
+
+export const fetchIscoCodes = createAsyncThunk(
+  "institutionRegistration/fetchIscoCodes",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await api.get("/isco-codes");
+
+      if (response.data?.status === "success" && response.data?.data) {
+        return Array.isArray(response.data.data)
+          ? response.data.data
+          : response.data.data.lists || [];
+      }
+
+      if (Array.isArray(response.data)) {
+        return response.data;
+      }
+
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        return response.data.data;
+      }
+
+      return [];
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message ||
+        error.message ||
+        "Failed to fetch ISCO codes"
+      );
+    }
+  }
+);
+
 // Enhanced Initial State with ALL missing fields including owner_if and country_flag
 const initialState = {
   // Form data
@@ -947,6 +1009,14 @@ const initialState = {
   regionsLoading: false,
   regionsError: null,
   selectedRegion: null,
+
+  taxIdTypes: [],
+  taxIdTypesLoading: false,
+  taxIdTypesError: null,
+
+  iscoCodes: [],
+  iscoCodesLoading: false,
+  iscoCodesError: null,
 
   // NEW: All missing individual field states
   searchTerm: "",
@@ -1934,6 +2004,32 @@ const institutionRegistrationSlice = createSlice({
         state.regionsLoading = false;
         state.regionsError = action.payload;
         state.regions = [];
+      })
+      .addCase(fetchTaxIdTypes.pending, (state) => {
+        state.taxIdTypesLoading = true;
+        state.taxIdTypesError = null;
+      })
+      .addCase(fetchTaxIdTypes.fulfilled, (state, action) => {
+        state.taxIdTypesLoading = false;
+        state.taxIdTypes = action.payload || [];
+      })
+      .addCase(fetchTaxIdTypes.rejected, (state, action) => {
+        state.taxIdTypesLoading = false;
+        state.taxIdTypesError = action.payload;
+        state.taxIdTypes = [];
+      })
+      .addCase(fetchIscoCodes.pending, (state) => {
+        state.iscoCodesLoading = true;
+        state.iscoCodesError = null;
+      })
+      .addCase(fetchIscoCodes.fulfilled, (state, action) => {
+        state.iscoCodesLoading = false;
+        state.iscoCodes = action.payload || [];
+      })
+      .addCase(fetchIscoCodes.rejected, (state, action) => {
+        state.iscoCodesLoading = false;
+        state.iscoCodesError = action.payload;
+        state.iscoCodes = [];
       });
   },
 });
@@ -2202,6 +2298,14 @@ export const selectOccupationLoading = (state) => state.institutionRegistration.
 export const selectRegions = (state) => state.institutionRegistration.regions;
 export const selectRegionsLoading = (state) => state.institutionRegistration.regionsLoading;
 export const selectRegionsError = (state) => state.institutionRegistration.regionsError;
+
+export const selectTaxIdTypes = (state) => state.institutionRegistration.taxIdTypes;
+export const selectTaxIdTypesLoading = (state) => state.institutionRegistration.taxIdTypesLoading;
+export const selectTaxIdTypesError = (state) => state.institutionRegistration.taxIdTypesError;
+
+export const selectIscoCodes = (state) => state.institutionRegistration.iscoCodes;
+export const selectIscoCodesLoading = (state) => state.institutionRegistration.iscoCodesLoading;
+export const selectIscoCodesError = (state) => state.institutionRegistration.iscoCodesError;
 // =============================================================================
 // NEW OWNER-RELATED SELECTORS - Added the missing selectors
 // =============================================================================
