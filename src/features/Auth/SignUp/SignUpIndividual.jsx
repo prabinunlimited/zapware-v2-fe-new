@@ -19,6 +19,7 @@ import ErrorModal from "../../../components/PopupModal/ErrorModal";
 import SuccessModal from "../../../components/PopupModal/SuccessModal";
 import RegistrationLayout from "../../../components/ProgressBar/RegistrationLayout";
 import SSNConfirmationPopup from "../../../components/PopupModal/SSNConfirmationPopup";
+import { fetchIndustryTypes, selectIndustryTypes } from '../slices/institutionRegistrationSlice';
 
 // Redux imports
 import { useDispatch, useSelector } from "react-redux";
@@ -188,9 +189,15 @@ const getSectionFields = (sectionIndex, values, shouldShowPurposeOfAccount) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "documentIssueState",
+        "taxType",
+        "taxId",
       ];
       if (values.idDocumentType === "other") {
         idFields.push("idDocumentTypeOther");
+      }
+      if (values.taxType === "other") {
+        idFields.push("taxTypeOther");
       }
 
       // Only add SSN to required fields if it should be shown
@@ -245,6 +252,9 @@ const getSectionRequiredFields = (sectionIndex) => {
         "idDocumentNumber",
         "idIssuedDate",
         "idIssuedCountryCode",
+        "documentIssueState",
+        "taxType",
+        "taxId",
       ];
 
     case 3: // Security
@@ -320,6 +330,21 @@ const createValidationSchema = (shouldShowPurposeOfAccount) => {
         .required("Purpose of account is required")
         .min(3, "Please provide more detail")
       : Yup.string().notRequired(),
+
+    taxType: Yup.string().required("Tax Type is required"),
+
+    taxTypeOther: Yup.string().when("taxType", {
+      is: "other",
+      then: (schema) =>
+        schema
+          .required("Please specify tax type")
+          .min(2, "Tax type must be at least 2 characters"),
+      otherwise: (schema) => schema.notRequired(),
+    }),
+
+    taxId: Yup.string()
+      .required("Tax ID is required")
+      .min(2, "Tax ID must be at least 2 characters"),
 
     // Update the SSN validation in createValidationSchema()
     ssn: Yup.string().test(
@@ -441,6 +466,19 @@ function SignUpIndividualContent() {
   const [occupationsLoading, setOccupationsLoading] = useState(false);
   const [selectedOccupation, setSelectedOccupation] = useState(null);
 
+  const [iscoCodes, setIscoCodes] = useState([]);
+  const [iscoCodesLoading, setIscoCodesLoading] = useState(false);
+  const [selectedIscoCode, setSelectedIscoCode] = useState(null);
+
+  const [taxIdTypes, setTaxIdTypes] = useState([]);
+  const [taxIdTypesLoading, setTaxIdTypesLoading] = useState(false);
+
+  const [sourceOfIncomes, setSourceOfIncomes] = useState([]);
+  const [sourceOfIncomesLoading, setSourceOfIncomesLoading] = useState(false);
+
+  const [employmentStatuses, setEmploymentStatuses] = useState([]);
+  const [employmentStatusesLoading, setEmploymentStatusesLoading] = useState(false);
+
   const [purposeOfAccount, setPurposeOfAccount] = useState("");
   const [monthlyExpectedActivity, setMonthlyExpectedActivity] = useState("");
 
@@ -556,6 +594,8 @@ function SignUpIndividualContent() {
 
   const zipLookup = useSelector(selectZipLookup);
 
+  const industryTypes = useSelector(selectIndustryTypes) || [];
+
   // Extract location state with defaults
   const locationState = location.state || {};
   console.log("📥 LOCATION STATE RECEIVED:", {
@@ -624,6 +664,12 @@ function SignUpIndividualContent() {
       customer_sending_countries: [],
       customer_receiving_funds_countries: [],
       occupation: "",
+      isco_code_id: "",
+      industry_type: "",
+      source_of_income_id: "",
+      source_of_income_other: "",
+      employment_status_id: "",
+      employer_name: "",
       purpose_of_account: "",
       monthly_expected_activity: "",
       dob: "",
@@ -632,7 +678,11 @@ function SignUpIndividualContent() {
       idDocumentNumber: "",
       idIssuedDate: "",
       idIssuedCountryCode: "",
+      document_issue_state: "",
       idDocumentTypeOther: "",
+      taxType: "",
+      taxTypeOther: "",
+      taxId: "",
       accept_sms: 0,
       accept_privacy_policy: 0,
       accept_disclosure: 0,
@@ -877,7 +927,28 @@ function SignUpIndividualContent() {
 
   const handleOccupationChange = (selectedOption) => {
     setSelectedOccupation(selectedOption);
-    formik.setFieldValue("occupation", selectedOption?.label || "");
+    formik.setFieldValue("occupation", selectedOption?.value || "");
+  };
+
+  const handleIscoCodeChange = (selectedOption) => {
+    setSelectedIscoCode(selectedOption);
+    formik.setFieldValue("isco_code_id", selectedOption?.value || "");
+  };
+
+  const handleIndustryTypeChange = (selectedOption) => {
+    formik.setFieldValue("industry_type", selectedOption?.value ?? "");
+  };
+
+  const handleSourceOfIncomeChange = (selectedOption) => {
+    const selectedValue = selectedOption?.value ?? "";
+    formik.setFieldValue("source_of_income_id", selectedValue);
+    if (selectedValue !== "other") {
+      formik.setFieldValue("source_of_income_other", "");
+    }
+  };
+
+  const handleEmploymentStatusChange = (selectedOption) => {
+    formik.setFieldValue("employment_status_id", selectedOption?.value ?? "");
   };
 
   // Handle purpose of account change
@@ -1085,16 +1156,34 @@ function SignUpIndividualContent() {
         gender: values.gender,
         customer_sending_countries: values.customer_sending_countries,
         customer_receiving_funds_countries: values.customer_receiving_funds_countries,
-        occupation: values.occupation || "",
+        occupation: values.occupation ? Number(values.occupation) : "",
+        isco_code_id: values.isco_code_id ? Number(values.isco_code_id) : "",
+        industry_type: values.industry_type ? Number(values.industry_type) : "",
+        source_of_income_id:
+          values.source_of_income_id === "other" || !values.source_of_income_id
+            ? null
+            : Number(values.source_of_income_id),
+        source_of_income_other:
+          values.source_of_income_id === "other"
+            ? values.source_of_income_other || ""
+            : "",
+        employment_status_id: values.employment_status_id
+          ? Number(values.employment_status_id)
+          : "",
+        employer_name: values.employer_name || "",
         purpose_of_account: values.purpose_of_account || "",
         monthly_expected_activity: values.monthly_expected_activity || "",
         dob: values.dob,
         ssn: values.ssn ? values.ssn.replace(/-/g, "") : "",
-        idDocumentType: values.idDocumentType,
+        document_id: values.idDocumentType === "other" ? null : Number(values.idDocumentType),
         idDocumentNumber: values.idDocumentNumber,
         idIssuedDate: values.idIssuedDate,
         idIssuedCountryCode: values.idIssuedCountryCode,
+        document_issue_state: values.document_issue_state || "",
         idDocumentTypeOther: values.idDocumentTypeOther || "",
+        tax_id_type_id: values.taxType === "other" ? null : Number(values.taxType),
+        tax_id_type_other: values.taxType === "other" ? values.taxTypeOther : "",
+        tax_id: values.taxId,
         service_providers: service_provide_ids,
         referral_code: referral_code || "",
         agent_code: agent_code || "",
@@ -1229,11 +1318,16 @@ function SignUpIndividualContent() {
       try {
         const bearertoken = localStorage.getItem("bearertoken");
 
+        setTaxIdTypesLoading(true);
+        setSourceOfIncomesLoading(true);
+        setEmploymentStatusesLoading(true);
+
         const primaryFetches = [
           dispatch(fetchCountries()).unwrap().catch(() => []),
           dispatch(fetchNationalities()).unwrap().catch(() => []),
           dispatch(fetchIdDocumentTypes()).unwrap().catch(() => []),
           dispatch(fetchTermsAndConditions()).unwrap().catch(() => []),
+          dispatch(fetchIndustryTypes()).unwrap().catch(() => []),
           axios
             .get(`${API_URL}/customers/fetch-occupation`, {
               headers: {
@@ -1249,6 +1343,70 @@ function SignUpIndividualContent() {
               }
             })
             .catch(() => setOccupations([])),
+          axios
+            .get(`${API_URL}/isco-codes`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setIscoCodes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setIscoCodes(res.data);
+              }
+            })
+            .catch(() => setIscoCodes([]))
+            .finally(() => setIscoCodesLoading(false)),
+          axios
+            .get(`${API_URL}/fetch-income`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setSourceOfIncomes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setSourceOfIncomes(res.data);
+              }
+            })
+            .catch(() => setSourceOfIncomes([]))
+            .finally(() => setSourceOfIncomesLoading(false)),
+          axios
+            .get(`${API_URL}/employment-status`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setEmploymentStatuses(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setEmploymentStatuses(res.data);
+              }
+            })
+            .catch(() => setEmploymentStatuses([]))
+            .finally(() => setEmploymentStatusesLoading(false)),
+          axios
+            .get(`${API_URL}/tax-id-types`, {
+              headers: {
+                Authorization: `Bearer ${bearertoken}`,
+                "Content-Type": "application/json",
+              },
+            })
+            .then((res) => {
+              if (res.data?.data && Array.isArray(res.data.data)) {
+                setTaxIdTypes(res.data.data);
+              } else if (Array.isArray(res.data)) {
+                setTaxIdTypes(res.data);
+              }
+            })
+            .catch(() => setTaxIdTypes([]))
+            .finally(() => setTaxIdTypesLoading(false)),
         ];
 
         // Wait until ALL 5 APIs have completely finished
@@ -2647,35 +2805,249 @@ function SignUpIndividualContent() {
                     </div>
                   )}
 
-                  {/* Occupation */}
-                  <div>
-                    <label htmlFor="occupation" className="block text-sm font-medium text-gray-700 mb-2.5">
+                  {/* Occupation Group */}
+                  <div className="md:col-span-2 pb-6 border-b border-gray-200">
+                    <h4 className="text-base font-semibold text-blue-600 mb-3 pb-1 border-b border-gray-200">
                       Occupation
-                    </label>
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Occupation */}
+                      <div>
+                        <label
+                          htmlFor="occupation"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Occupation
+                        </label>
 
-                    {occupationsLoading ? (
-                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
-                        <RingLoader size={20} color="#3b82f6" />
-                        <span className="ml-2 text-gray-600">Loading occupations...</span>
+                        {occupationsLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">Loading occupations...</span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="occupation"
+                            name="occupation"
+                            options={occupations.map((occ) => ({
+                              value: occ.id,
+                              label: occ.name,
+                            }))}
+                            onChange={handleOccupationChange}
+                            onBlur={formik.handleBlur}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select your occupation"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={selectedOccupation}
+                          />
+                        )}
                       </div>
-                    ) : (
-                      <Select
-                        id="occupation"
-                        name="occupation"
-                        options={occupations.map(occ => ({
-                          value: occ.name,
-                          label: occ.name
-                        }))}
-                        onChange={handleOccupationChange}
-                        onBlur={formik.handleBlur}
-                        className="basic-single"
-                        classNamePrefix="select"
-                        placeholder="Select your occupation"
-                        isClearable={true}
-                        styles={customStyles}
-                        value={selectedOccupation}
-                      />
-                    )}
+
+                      {/* Occupation Code (ISCO) */}
+                      <div>
+                        <label
+                          htmlFor="isco_code_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Occupation Code (ISCO)
+                        </label>
+
+                        {iscoCodesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">Loading ISCO codes...</span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="isco_code_id"
+                            name="isco_code_id"
+                            options={iscoCodes.map((item) => ({
+                              value: item.id,
+                              label:
+                                item.name || item.title || item.description || String(item.id),
+                            }))}
+                            onChange={handleIscoCodeChange}
+                            onBlur={formik.handleBlur}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select ISCO code"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={selectedIscoCode}
+                          />
+                        )}
+                      </div>
+
+                      {/* Source of Income */}
+                      <div>
+                        <label
+                          htmlFor="source_of_income_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Source of Income
+                        </label>
+
+                        {sourceOfIncomesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">
+                              Loading sources of income...
+                            </span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="source_of_income_id"
+                            name="source_of_income_id"
+                            options={[
+                              ...sourceOfIncomes.map((item) => ({
+                                value: item.id,
+                                label: item.name || item.title || String(item.id),
+                              })),
+                              { value: "other", label: "Other" },
+                            ]}
+                            onChange={handleSourceOfIncomeChange}
+                            onBlur={() => formik.setFieldTouched("source_of_income_id", true)}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select source of income"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={
+                              [
+                                ...sourceOfIncomes.map((item) => ({
+                                  value: item.id,
+                                  label: item.name || item.title || String(item.id),
+                                })),
+                                { value: "other", label: "Other" },
+                              ].find((opt) => opt.value === formik.values.source_of_income_id) ||
+                              null
+                            }
+                          />
+                        )}
+                      </div>
+
+                      {/* Conditional Source of Income (Other) */}
+                      {formik.values.source_of_income_id === "other" && (
+                        <div>
+                          <label
+                            htmlFor="source_of_income_other"
+                            className="block text-sm font-medium text-gray-700 mb-2.5"
+                          >
+                            Specify Source of Income
+                          </label>
+                          <input
+                            id="source_of_income_other"
+                            name="source_of_income_other"
+                            type="text"
+                            placeholder="Specify your source of income"
+                            onChange={formik.handleChange}
+                            onBlur={formik.handleBlur}
+                            value={formik.values.source_of_income_other}
+                            className="w-full px-4 py-3.5 border border-gray-200 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                          />
+                        </div>
+                      )}
+
+                      {/* Employment Status */}
+                      <div>
+                        <label
+                          htmlFor="employment_status_id"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Employment Status
+                        </label>
+
+                        {employmentStatusesLoading ? (
+                          <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <RingLoader size={20} color="#3b82f6" />
+                            <span className="ml-2 text-gray-600">
+                              Loading employment status...
+                            </span>
+                          </div>
+                        ) : (
+                          <Select
+                            id="employment_status_id"
+                            name="employment_status_id"
+                            options={employmentStatuses.map((item) => ({
+                              value: item.id,
+                              label: item.name || item.title || String(item.id),
+                            }))}
+                            onChange={handleEmploymentStatusChange}
+                            onBlur={() => formik.setFieldTouched("employment_status_id", true)}
+                            className="basic-single"
+                            classNamePrefix="select"
+                            placeholder="Select employment status"
+                            isClearable={true}
+                            styles={customStyles}
+                            value={
+                              employmentStatuses
+                                .map((item) => ({
+                                  value: item.id,
+                                  label: item.name || item.title || String(item.id),
+                                }))
+                                .find(
+                                  (opt) => opt.value === formik.values.employment_status_id,
+                                ) || null
+                            }
+                          />
+                        )}
+                      </div>
+
+                      {/* Employer Name */}
+                      <div>
+                        <label
+                          htmlFor="employer_name"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Employer Name
+                        </label>
+                        <input
+                          id="employer_name"
+                          name="employer_name"
+                          type="text"
+                          placeholder="Enter your employer name"
+                          onChange={formik.handleChange}
+                          onBlur={formik.handleBlur}
+                          value={formik.values.employer_name}
+                          className="w-full px-4 py-3.5 border border-gray-200 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 shadow-sm"
+                        />
+                      </div>
+
+                      {/* Industry Type */}
+                      <div>
+                        <label
+                          htmlFor="industry_type"
+                          className="block text-sm font-medium text-gray-700 mb-2.5"
+                        >
+                          Industry Type
+                        </label>
+                        <Select
+                          id="industry_type"
+                          name="industry_type"
+                          options={industryTypes.map((item) => ({
+                            value: item.id,
+                            label: item.name || item.title || item.label || String(item.id),
+                          }))}
+                          onChange={handleIndustryTypeChange}
+                          onBlur={() => formik.setFieldTouched("industry_type", true)}
+                          className="basic-single"
+                          classNamePrefix="select"
+                          placeholder="Select industry type"
+                          isClearable={true}
+                          styles={customStyles}
+                          value={
+                            industryTypes
+                              .map((item) => ({
+                                value: item.id,
+                                label: item.name || item.title || item.label || String(item.id),
+                              }))
+                              .find((opt) => opt.value === formik.values.industry_type) || null
+                          }
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Monthly Expected Activity - Text Field */}
@@ -3482,7 +3854,7 @@ function SignUpIndividualContent() {
                         {idDocumentTypes.map((docType, index) => (
                           <option
                             key={docType.id ?? `${docType.name}-${index}`}
-                            value={docType.name}
+                            value={docType.id ?? docType.name}
                           >
                             {docType.name}
                           </option>
@@ -3657,6 +4029,46 @@ function SignUpIndividualContent() {
                       )}
                   </div>
 
+                  <div>
+                    <label
+                      htmlFor="document_issue_state"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      ID Issuing State
+                    </label>
+                    <input
+                      type="text"
+                      id="document_issue_state"
+                      name="document_issue_state"
+                      value={formik.values.document_issue_state}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      placeholder="Enter issuing state/province"
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.document_issue_state &&
+                        formik.errors.document_issue_state
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.document_issue_state &&
+                      formik.errors.document_issue_state && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.document_issue_state}
+                        </p>
+                      )}
+                  </div>
+
                   {/* Issue Date */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3680,6 +4092,177 @@ function SignUpIndividualContent() {
                           {formik.errors.idIssuedDate}
                         </p>
                       )}
+                  </div>
+                  {/* 1. Tax Type Dropdown (Always Column 1) */}
+                  <div>
+                    <label
+                      htmlFor="taxType"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Tax Type *
+                    </label>
+
+                    {taxIdTypesLoading ? (
+                      <div className="flex items-center justify-center py-3 border border-gray-200 rounded-xl bg-gray-50">
+                        <RingLoader size={20} color="#3b82f6" />
+                        <span className="ml-2 text-gray-600">Loading tax types...</span>
+                      </div>
+                    ) : (
+                      <Select
+                        id="taxType"
+                        name="taxType"
+                        menuPortalTarget={document.body}
+                        menuPosition="fixed"
+                        options={[
+                          ...taxIdTypes.map((type) => ({
+                            value: type.id ?? type.code ?? type.name,
+                            label: type.name || type.label || type.code,
+                          })),
+                          { value: "other", label: "Other" },
+                        ]}
+                        onChange={(selectedOption) => {
+                          const selectedValue = selectedOption?.value ?? "";
+                          formik.setFieldValue("taxType", selectedValue);
+                          if (selectedValue !== "other") {
+                            formik.setFieldValue("taxTypeOther", "");
+                          }
+                        }}
+                        onBlur={() => formik.setFieldTouched("taxType", true)}
+                        value={
+                          [
+                            ...taxIdTypes.map((type) => ({
+                              value: type.id ?? type.code ?? type.name,
+                              label: type.name || type.label || type.code,
+                            })),
+                            { value: "other", label: "Other" },
+                          ].find((option) => option.value === formik.values.taxType) || null
+                        }
+                        className="basic-single"
+                        classNamePrefix="select"
+                        placeholder="Select Tax Type"
+                        styles={{
+                          ...customStyles,
+                          menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                          control: (provided, state) => ({
+                            ...provided,
+                            minHeight: "52px",
+                            borderRadius: "12px",
+                            borderColor:
+                              formik.touched.taxType && formik.errors.taxType
+                                ? "#f87171"
+                                : "#e5e7eb",
+                            boxShadow: state.isFocused
+                              ? formik.touched.taxType && formik.errors.taxType
+                                ? "0 0 0 3px rgba(248, 113, 113, 0.1)"
+                                : "0 0 0 3px rgba(59, 130, 246, 0.1)"
+                              : "none",
+                            "&:hover": {
+                              borderColor:
+                                formik.touched.taxType && formik.errors.taxType
+                                  ? "#ef4444"
+                                  : "#3b82f6",
+                            },
+                          }),
+                        }}
+                      />
+                    )}
+
+                    {formik.touched.taxType && formik.errors.taxType && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.taxType}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* 2. Conditional "Other" Tax Type Input (Sits to the right of Tax Type in Column 2) */}
+                  {formik.values.taxType === "other" && (
+                    <div>
+                      <label
+                        htmlFor="taxTypeOther"
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                      >
+                        Specify Tax Type *
+                      </label>
+                      <input
+                        type="text"
+                        id="taxTypeOther"
+                        name="taxTypeOther"
+                        value={formik.values.taxTypeOther}
+                        onChange={formik.handleChange}
+                        onBlur={formik.handleBlur}
+                        placeholder="Specify tax type"
+                        className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.taxTypeOther && formik.errors.taxTypeOther
+                          ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                          : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                          } shadow-sm`}
+                      />
+                      {formik.touched.taxTypeOther && formik.errors.taxTypeOther && (
+                        <p className="text-red-500 text-xs mt-2 flex items-center">
+                          <svg
+                            className="w-3.5 h-3.5 mr-1"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          {formik.errors.taxTypeOther}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 3. Tax ID Input (Sits beside Tax Type by default; shifts to next row below when "Other" is active) */}
+                  <div>
+                    <label
+                      htmlFor="taxId"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
+                      Tax ID *
+                    </label>
+                    <input
+                      type="text"
+                      id="taxId"
+                      name="taxId"
+                      value={formik.values.taxId}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      placeholder="Enter your Tax ID"
+                      className={`w-full px-4 py-3.5 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 ${formik.touched.taxId && formik.errors.taxId
+                        ? "border-red-400 focus:ring-red-500/30 focus:border-red-500"
+                        : "border-gray-200 focus:ring-blue-500/30 focus:border-blue-500"
+                        } shadow-sm`}
+                    />
+                    {formik.touched.taxId && formik.errors.taxId && (
+                      <p className="text-red-500 text-xs mt-2 flex items-center">
+                        <svg
+                          className="w-3.5 h-3.5 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        {formik.errors.taxId}
+                      </p>
+                    )}
                   </div>
                 </div>
 

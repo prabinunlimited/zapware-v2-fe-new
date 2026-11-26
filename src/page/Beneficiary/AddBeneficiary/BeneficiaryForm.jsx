@@ -535,6 +535,9 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     "DKK",
     "SEK",
     "EUR",
+    "BDT",
+    "BIF",
+    "RWF",
     "GBP",
     "INR",
     "KES",
@@ -679,6 +682,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       state: initialData?.state || "",
       city: initialData?.city || "",
       street: initialData?.street || "",
+      building_no: initialData?.building_no || "",
       postalcode: initialData?.postalcode || "",
       relationtobenef: initialData?.relationtobenef || "",
       otherRelationship: initialData?.otherRelationship || "",
@@ -832,6 +836,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         state: beneficiaryDetails.state || "",
         city: beneficiaryDetails.city || "",
         street: beneficiaryDetails.street || "",
+        building_no: beneficiaryDetails.building_no || "",
         postalcode: beneficiaryDetails.postalcode || "",
         relationtobenef: beneficiaryDetails.relationtobenef || "",
         otherRelationship: beneficiaryDetails.otherRelationship || "",
@@ -1052,12 +1057,22 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     return cities[formik.values.country_id] || [];
   };
 
+  const isIndia = useMemo(() => {
+    if (currency === "INR") return true;
+    const selected = countries.find(
+      (c) => c.id?.toString() === formik.values.country_id?.toString()
+    );
+    return (
+      selected?.name?.toLowerCase() === "india" ||
+      selected?.country_code === "IN"
+    );
+  }, [currency, formik.values.country_id, countries]);
+
   const isFormValid = useCallback(() => {
     if (formik.values.beneftype === "") return false;
 
     if (
       formik.values.name === "" ||
-      // formik.values.country_id === "" ||
       formik.values.country_phone_code === "" ||
       formik.values.phone_number === "" ||
       formik.values.city === "" ||
@@ -1065,22 +1080,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
     )
       return false;
 
-    // if (formik.values.beneftype === "individual") {
-    //   if (formik.values.relationtobenef === "") return false;
-    // }
-
-    if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+    // Only validate ID Type/Number for BDT/PKR when not India
+    if ((currency === "BDT" || currency === "PKR") && !isIndia) {
       if (
         formik.values.beneficiary_id_type === "" ||
         formik.values.beneficiary_id_number === ""
       )
         return false;
-
-      if (currency === "INR" && formik.values.city === "") return false;
     }
 
+    if (currency === "INR" && formik.values.city === "") return false;
+
     return true;
-  }, [formik.values, currency]);
+  }, [formik.values, currency, isIndia]);
 
   const handleCurrencyChange = async (e) => {
     const newCurrency = e.target.value;
@@ -1288,6 +1300,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           state: beneficiaryData.state || "",
           city: beneficiaryData.city || "",
           street: beneficiaryData.street || "",
+          building_no: beneficiaryData.building_no || "",
           postalcode: beneficiaryData.postalcode || "",
           relationtobenef: relationshipValue || "",
           otherRelationship: beneficiaryData.otherRelationship || "",
@@ -1621,16 +1634,19 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           toast.error(`Street Required for Currency: ${currency}`);
           return false;
         }
-        const idTypeInput = formik.values.beneficiary_id_type;
-        if (idTypeInput === "" || idTypeInput === " ") {
-          toast.error(`ID Type Required for Currency: ${currency}`);
-          return false;
-        }
+        // Only enforce ID type & ID number if NOT India / INR
+        if (currency !== "INR" && !isIndia) {
+          const idTypeInput = formik.values.beneficiary_id_type;
+          if (idTypeInput === "" || idTypeInput === " ") {
+            toast.error(`ID Type Required for Currency: ${currency}`);
+            return false;
+          }
 
-        const idNumber = formik.values.beneficiary_id_number;
-        if (idNumber === "" || idNumber === " ") {
-          toast.error(`ID Number Required for Currency: ${currency}`);
-          return false;
+          const idNumber = formik.values.beneficiary_id_number;
+          if (idNumber === "" || idNumber === " ") {
+            toast.error(`ID Number Required for Currency: ${currency}`);
+            return false;
+          }
         }
 
         if (currency === "INR") {
@@ -1925,8 +1941,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           }
         }
       }
-    } else {
-      // Original validation for new beneficiary (non-existing)
+    } else if (mode === "create" || editBankOnlyMode || isAddBankOnlyMode) {
+      // Only validate bank accounts when creating a beneficiary or editing/adding bank details
       const isRailsMissing = bankAccounts.some((account) => !account.rails);
       if (isRailsMissing) {
         console.log("❌ DEBUG - Early return due to missing rails");
@@ -1947,8 +1963,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
         return;
       }
 
-      // Currency-specific validations
-      if (currency === "BDT" || currency === "INR" || currency === "PKR") {
+      // Currency-specific validations (excluded when India / INR)
+      if ((currency === "BDT" || currency === "PKR") && !isIndia) {
         if (!formik.values.beneficiary_id_type) {
           toast.error("Beneficiary ID Type is required");
           setLoading(false);
@@ -1985,6 +2001,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
       state: formik.values.state,
       city: formik.values.city,
       street: formik.values.street,
+      building_no: formik.values.building_no || "",
       postalcode: formik.values.postalcode,
       relationtobenef: finalRelationship,
       nationality_id: formik.values.nationality_id,
@@ -2665,13 +2682,36 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
           )}
         </div>
 
+        {/* Account Type (optional, all currencies) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
+          <div className="mb-4">
+            <FieldLabel>Account Type</FieldLabel>
+            <select
+              className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+              value={account.accountType || ""}
+              onChange={(e) =>
+                handleBankAccountChange(index, "accountType", e.target.value)
+              }
+            >
+              <option value="">Select Account Type</option>
+              <option value="Business Savings">Business Savings</option>
+              <option value="Business Checkings">Business Checkings</option>
+              <option value="Personal Checkings">Personal Checkings</option>
+              <option value="Personal Savings">Personal Savings</option>
+            </select>
+          </div>
+        </div>
+
         {/* Currency-Specific ID Fields */}
         {(accountCurrency === "BDT" ||
           accountCurrency === "INR" ||
           accountCurrency === "PKR") && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
               <div className="mb-4">
-                <FieldLabel required info="Required for regulatory compliance">
+                <FieldLabel
+                  required={accountCurrency !== "INR" && !isIndia}
+                  info={accountCurrency !== "INR" && !isIndia ? "Required for regulatory compliance" : null}
+                >
                   Beneficiary ID Type
                   {usingExistingBeneficiary && (
                     <span className="ml-1 text-xs text-green-600">(Fill for this account)</span>
@@ -2682,7 +2722,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   value={formik.values.beneficiary_id_type}
                   onChange={formik.handleChange}
                   name="beneficiary_id_type"
-                  required
+                  required={accountCurrency !== "INR" && !isIndia}
                 >
                   <option value="">Select ID Type</option>
                   {currentIdTypes.map((idType) => (
@@ -2695,8 +2735,8 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
 
               <div className="mb-4">
                 <FieldLabel
-                  required
-                  info="Enter the ID number exactly as on the document"
+                  required={accountCurrency !== "INR" && !isIndia}
+                  info={accountCurrency !== "INR" && !isIndia ? "Enter the ID number exactly as on the document" : null}
                 >
                   Beneficiary ID Number
                   {usingExistingBeneficiary && (
@@ -2710,7 +2750,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   value={formik.values.beneficiary_id_number}
                   onChange={formik.handleChange}
                   name="beneficiary_id_number"
-                  required
+                  required={accountCurrency !== "INR" && !isIndia}
                 />
               </div>
             </div>
@@ -2932,124 +2972,122 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     ))}
                   </select>
                 </div>
+              </div>
+            )}
 
-                {account.paymentMethod === "ACH" && (
+            {/* INR, RWF, BIF Local Transfers */}
+            {(accountCurrency === "INR" ||
+              accountCurrency === "RWF" ||
+              accountCurrency === "BIF") && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Bank Name - common to INR, RWF, BIF */}
                   <div className="mb-4">
-                    <FieldLabel required>
-                      Account Type
-                    </FieldLabel>
-                    <select
-                      className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                      value={account.accountType || ""}
+                    <FieldLabel required>Bank Name</FieldLabel>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                      placeholder="Enter Bank Name"
+                      value={account.bankName || ""}
+                      onChange={(e) =>
+                        handleBankAccountChange(index, "bankName", e.target.value)
+                      }
+                      required
+                    />
+                  </div>
+
+                  {/* Account Number - common to INR, RWF, BIF */}
+                  <div className="mb-4">
+                    <FieldLabel required>Account Number</FieldLabel>
+                    <input
+                      type="text"
+                      className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                      placeholder="Enter Account Number"
+                      value={account.accountNumber || ""}
                       onChange={(e) =>
                         handleBankAccountChange(
                           index,
-                          "accountType",
+                          "accountNumber",
                           e.target.value
                         )
                       }
                       required
-                    >
-                      <option value="">Select Account Type</option>
-                      <option value="Business Savings">Business Savings</option>
-                      <option value="Business Checkings">
-                        Business Checkings
-                      </option>
-                      <option value="Personal Checkings">
-                        Personal Checkings
-                      </option>
-                      <option value="Personal Savings">Personal Savings</option>
-                    </select>
+                    />
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* INR Local Transfer */}
-            {accountCurrency === "INR" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Bank Name
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter Bank Name"
-                    value={account.bankName || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(index, "bankName", e.target.value)
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Account Number
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter Account Number"
-                    value={account.accountNumber || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(
-                        index,
-                        "accountNumber",
-                        e.target.value
-                      )
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <FieldLabel required info="Indian Financial System Code">
-                    IFSC Code
-                  </FieldLabel>
-                  <input
-                    type="text"
-                    className={`w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white`}
-                    placeholder="Enter IFSC Code"
-                    value={account.ifsc || ""}
-                    onChange={(e) =>
-                      handleBankAccountChange(index, "ifsc", e.target.value)
-                    }
-                    required
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <FieldLabel required>
-                    Bank Country
-                  </FieldLabel>
-                  <Select
-                    className="text-sm"
-                    classNamePrefix="select"
-                    options={countries.map(country => ({
-                      value: country.id.toString(),
-                      label: country.name
-                    }))}
-                    placeholder="Search and select bank country..."
-                    isSearchable
-                    value={
-                      account.bankCountry
-                        ? {
-                          value: account.bankCountry,
-                          label: countries.find(c => c.id.toString() === account.bankCountry)?.name || account.bankCountry
+                  {/* IFSC Code - INR ONLY (Hidden for RWF and BIF) */}
+                  {accountCurrency === "INR" && (
+                    <div className="mb-4">
+                      <FieldLabel required info="Indian Financial System Code">
+                        IFSC Code
+                      </FieldLabel>
+                      <input
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                        placeholder="Enter IFSC Code"
+                        value={account.ifsc || ""}
+                        onChange={(e) =>
+                          handleBankAccountChange(index, "ifsc", e.target.value)
                         }
-                        : null
-                    }
-                    onChange={(selectedOption) => {
-                      handleBankAccountChange(index, "bankCountry", selectedOption?.value || "");
-                    }}
-                    styles={customStyles}
-                    required
-                  />
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* SWIFT / BIC Code - RWF & BIF ONLY */}
+                  {(accountCurrency === "RWF" || accountCurrency === "BIF") && (
+                    <div className="mb-4">
+                      <FieldLabel required info="Bank Identifier Code">
+                        SWIFT/BIC Code
+                      </FieldLabel>
+                      <input
+                        type="text"
+                        className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 bg-white"
+                        placeholder="Enter SWIFT/BIC code"
+                        value={account.swift || ""}
+                        onChange={(e) =>
+                          handleBankAccountChange(index, "swift", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                  )}
+
+                  {/* Bank Country - common to INR, RWF, BIF */}
+                  <div className="mb-4">
+                    <FieldLabel required>Bank Country</FieldLabel>
+                    <Select
+                      className="text-sm"
+                      classNamePrefix="select"
+                      options={countries.map((country) => ({
+                        value: country.id.toString(),
+                        label: country.name,
+                      }))}
+                      placeholder="Search and select bank country..."
+                      isSearchable
+                      value={
+                        account.bankCountry
+                          ? {
+                            value: account.bankCountry,
+                            label:
+                              countries.find(
+                                (c) => c.id.toString() === account.bankCountry
+                              )?.name || account.bankCountry,
+                          }
+                          : null
+                      }
+                      onChange={(selectedOption) => {
+                        handleBankAccountChange(
+                          index,
+                          "bankCountry",
+                          selectedOption?.value || ""
+                        );
+                      }}
+                      styles={customStyles}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* EUR Local Transfer */}
             {accountCurrency === "EUR" && (
@@ -4755,6 +4793,33 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                     />
                   </div>
 
+                  {/* Building No (Optional) */}
+                  <div>
+                    <FieldLabel required={false}>
+                      Building No
+                      {usingExistingBeneficiary && (
+                        <span className="ml-2 text-xs text-gray-500">
+                          (Pre-filled - Cannot Edit)
+                        </span>
+                      )}
+                    </FieldLabel>
+                    <input
+                      id="building_no"
+                      name="building_no"
+                      type="text"
+                      value={formik.values.building_no}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      className={`w-full px-4 py-3 text-sm text-gray-900 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-gray-400 ${usingExistingBeneficiary
+                        ? "bg-gray-100 cursor-not-allowed"
+                        : "bg-white"
+                        }`}
+                      placeholder="Enter building number (optional)"
+                      disabled={usingExistingBeneficiary}
+                      readOnly={usingExistingBeneficiary}
+                    />
+                  </div>
+
                   {/* Postal Code */}
                   <div>
                     <FieldLabel>
@@ -4819,7 +4884,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                   {(currency === "BDT" || currency === "INR" || currency === "PKR") && (
                     <>
                       <div>
-                        <FieldLabel required>
+                        <FieldLabel required={currency !== "INR" && !isIndia}>
                           {formik.values.beneftype === "institution" ? "Company ID Type" : "Beneficiary ID Type"}
                           {usingExistingBeneficiary && (
                             <span className="ml-2 text-xs text-gray-500">
@@ -4833,11 +4898,11 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                             value={formik.values.beneficiary_id_type}
                             onChange={formik.handleChange}
                             name="beneficiary_id_type"
-                            required
+                            required={currency !== "INR" && !isIndia}
                           >
                             <option value="">Select ID Type</option>
                             {getIdTypesForCurrency.map((idType) => (
-                              <option key={idType.id} value={idType.name}>
+                              <option key={idType.id || idType.name} value={idType.name}>
                                 {idType.name.charAt(0).toUpperCase() + idType.name.slice(1).replace(/_/g, ' ')}
                               </option>
                             ))}
@@ -4849,7 +4914,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                       </div>
 
                       <div>
-                        <FieldLabel required>
+                        <FieldLabel required={currency !== "INR" && !isIndia}>
                           {formik.values.beneftype === "institution" ? "Company ID Number" : "Beneficiary ID Number"}
                           {usingExistingBeneficiary && (
                             <span className="ml-2 text-xs text-gray-500">
@@ -4864,7 +4929,7 @@ const BeneficiaryForm = ({ mode = "create", initialData = null }) => {
                           value={formik.values.beneficiary_id_number}
                           onChange={formik.handleChange}
                           name="beneficiary_id_number"
-                          required
+                          required={currency !== "INR" && !isIndia}
                         />
                       </div>
                     </>
