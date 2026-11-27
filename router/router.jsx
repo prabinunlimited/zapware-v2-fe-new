@@ -14,6 +14,8 @@ import SelectPackage from "../src/features/Auth/Registration/SelectPackage/Selec
 import OpenCurrencyAccount from "../src/features/Auth/SignUp/SelectCurrencyAccount/CurrencySelectAccount";
 import PhoneVerification from "../src/features/Auth/Verification/PhoneVerification";
 import KYCVerification from "../src/features/Auth/KYCVerification";
+import KYCSuccess from "../src/features/Auth/KYCSuccess";
+import KYCRejected from "../src/features/Auth/KYCRejected";
 import PlaidCallback from "../src/features/Auth/Registration/Plaid/PlaidCallback";
 import ForgotPassword from "../src/features/Auth/Password/ForgotPassword";
 import Home from "../src/page/Home/Homepage";
@@ -145,6 +147,14 @@ const router = createBrowserRouter([
       {
         path: "pay-by-link-cancel",
         element: <PayByLinkCancel />,
+      },
+      {
+        path: "/kyc-success",
+        element: <KYCSuccess />,
+      },
+      {
+        path: "/kyc-rejected",
+        element: <KYCRejected />,
       },
     ],
   },
