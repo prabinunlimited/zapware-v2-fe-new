@@ -68,6 +68,8 @@ import ResponsiblePersonEdit from "../src/page/Profile/ResponsiblePersonEdit/Res
 import EditController from "../src/page/Profile/EditController/EditController";
 import EditOwner from "../src/page/Profile/EditOwner/EditOwner";
 import RequestToPay from "../src/page/RequestToPay/RequestToPay";
+import PayByLinkSuccess from "../src/page/Deposit/PayByLinkSuccess";
+import PayByLinkCancel from "../src/page/Deposit/PayByLinkCancel";
 
 const ProtectedLayout = () => {
   return (
@@ -136,6 +138,14 @@ const router = createBrowserRouter([
         path: "rates",
         element: <HeroSection />,
       },
+      {
+        path: "pay-by-link-success",
+        element: <PayByLinkSuccess />,
+      },
+      {
+        path: "pay-by-link-cancel",
+        element: <PayByLinkCancel />,
+      },
     ],
   },
 
@@ -164,6 +174,7 @@ const router = createBrowserRouter([
         path: "deposit/:customerId",
         element: <DepositPage />,
       },
+  
       {
         path: "convert/:customerId",
         element: <Convert />,

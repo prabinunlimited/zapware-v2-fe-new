@@ -45,12 +45,7 @@ import {
   setUSDBankAccounts,
 } from "./slices/bankAccountSlice";
 
-// ✅ CORRECT: Import account selectors from AccountSlice (ONCE)
-import {
-  selectAccounts as selectHomeAccounts,
-  selectAccountLoading as selectHomeAccountLoading,
-  selectAccountError as selectHomeAccountError,
-} from "../../page/Home/HomeSlice";
+import api from "../../services/api";
 
 import { tokenService } from "../../services/authService";
 
@@ -72,206 +67,117 @@ import BankLink from "./components/BankLink";
 // Shared
 import { usePartnerConfig } from "../../hooks/usePartnerConfig";
 
-// Fixed useCurrency hook that uses existing Redux account data
-const useFixedCurrency = (initialCurrency) => {
-  // Get accounts and loading state from Redux (same data used in AccountSummary)
-  const accounts = useSelector(selectHomeAccounts);
-  const accountLoading = useSelector(selectHomeAccountLoading);
-  const accountError = useSelector(selectHomeAccountError);
+// Fetch active-account-details directly for DepositPage without using HomeSlice state
+const useDirectAccountCurrency = (customerId, initialCurrency) => {
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [hasFetched, setHasFetched] = useState(false); // Prevents EmptyState flash while fetching
+  const [error, setError] = useState(null);
 
-  console.log("🔍 useFixedCurrency - Raw accounts from HomeSlice:", accounts);
-  console.log("🔍 useFixedCurrency - Accounts count:", accounts?.length || 0);
-  console.log("⏳ useFixedCurrency - Loading state:", accountLoading);
-  console.log("❌ useFixedCurrency - Error state:", accountError);
+  const fetchActiveAccounts = useCallback(async () => {
+    const resolvedCustomerId =
+      customerId || localStorage.getItem("authcustomer_id");
+    const authtoken =
+      localStorage.getItem("authtoken") || tokenService.getToken();
 
-  // Add debug to see the actual account structure
-  useEffect(() => {
-    if (accounts && accounts.length > 0) {
-      console.log("🔍 ACCOUNT STRUCTURE DEBUG:", {
-        firstAccount: accounts[0],
-        allCurrencies: accounts.map((acc) => ({
-          currency: acc.currency,
-          available_balance: acc.available_balance,
-          account_name: acc.account_name,
-          account_number: acc.account_number,
-          iban: acc.iban,
-          account_id: acc.account_id,
-        })),
-      });
+    if (!resolvedCustomerId) {
+      setError("Customer ID not found");
+      setLoading(false);
+      setHasFetched(true);
+      return;
     }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await api.get(
+        `/active-account-details/${resolvedCustomerId}`,
+        {
+          headers: { Authorization: `Bearer ${authtoken}` },
+          timeout: 30000,
+        },
+      );
+
+      if (response.data?.message === "Unauthenticated.") {
+        throw new Error("Unauthenticated");
+      }
+
+      // Safely extract account list regardless of response wrapper shape
+      const data = response.data;
+      let rawAccounts = [];
+      if (Array.isArray(data)) rawAccounts = data;
+      else if (Array.isArray(data?.account_details))
+        rawAccounts = data.account_details;
+      else if (
+        data?.account_details &&
+        typeof data.account_details === "object"
+      ) {
+        rawAccounts = Object.values(data.account_details);
+      } else if (Array.isArray(data?.data)) rawAccounts = data.data;
+      else if (Array.isArray(data?.accounts)) rawAccounts = data.accounts;
+
+      setAccounts(rawAccounts);
+    } catch (err) {
+      console.error("❌ Failed to fetch active-account-details:", err);
+      setError(
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to load account currencies",
+      );
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+      setHasFetched(true);
+    }
+  }, [customerId]);
+
+  useEffect(() => {
+    fetchActiveAccounts();
+  }, [fetchActiveAccounts]);
+
+  // Transform accounts into the format expected by <CurrencySelection />
+  const currencies = useMemo(() => {
+    if (!Array.isArray(accounts)) return [];
+
+    return accounts.map((account, index) => ({
+      currency_code: account.currency,
+      currency: account.currency,
+      available_balance: account.available_balance || "0.00",
+      account_name: account.account_name || `Account ${index + 1}`,
+      account_number: account.account_number || "N/A",
+      iban: account.iban || "N/A",
+      flag_url: account.flag_url,
+      account_id: account.account_id,
+      ...account,
+    }));
   }, [accounts]);
 
-  useEffect(() => {
-    // Pre-check and ensure token is available before any API calls
-    const ensureToken = async () => {
-      console.log("🔐 Pre-checking token status...");
-
-      const tokenInfo = tokenService.debugToken();
-      console.log("📊 Token debug info:", tokenInfo);
-
-      if (!tokenInfo.exists) {
-        console.log("🔄 No token found, attempting to get partner token...");
-        try {
-          // ✅ SIMPLER: Use axios directly to get partner token
-          const response = await axios.post(
-            `${import.meta.env.VITE_API_URL}/partner-login`,
-            {
-              client_id: "HK6V7709",
-              client_secret: "057d433a-2d02-437b-a265-56114567aa44",
-            },
-            {
-              headers: { "Content-Type": "application/json" },
-              timeout: 10000,
-            },
-          );
-
-          if (response.data?.data?.token) {
-            const newToken = response.data.data.token;
-            tokenService.setToken(newToken);
-            console.log("✅ Partner token obtained and stored");
-          } else {
-            console.error("❌ Failed to get partner token - invalid response");
-          }
-        } catch (error) {
-          console.error("❌ Token pre-check failed:", error);
-        }
-      } else {
-        console.log("✅ Token is available:", {
-          isValid: tokenInfo.validation?.isValid,
-          isJWT: tokenInfo.validation?.isJWT,
-          isExpired: tokenInfo.validation?.isExpired,
-        });
-      }
-    };
-
-    ensureToken();
-  }, []);
-
-  // Transform accounts to currencies format
-  const currencies = useMemo(() => {
-    if (accountLoading) {
-      console.log(
-        "⏳ useFixedCurrency - Still loading accounts, returning empty array",
-      );
-      return [];
-    }
-
-    if (accountError) {
-      console.log("❌ useFixedCurrency - Account error, returning empty array");
-      return [];
-    }
-
-    const safeAccounts = Array.isArray(accounts) ? accounts : [];
-
-    console.log(
-      "🔄 useFixedCurrency - Transforming accounts to currencies. Account count:",
-      safeAccounts.length,
-    );
-
-    const transformed = safeAccounts.map((account, index) => {
-      const currencyObj = {
-        // Required fields for currency selection
-        currency_code: account.currency,
-        currency: account.currency,
-        available_balance: account.available_balance || "0.00",
-        account_name: account.account_name || `Account ${index + 1}`,
-        account_number: account.account_number || "N/A",
-        iban: account.iban || "N/A",
-        flag_url: account.flag_url,
-        account_id: account.account_id,
-
-        // Include all original account properties for compatibility
-        ...account,
-      };
-
-      console.log(`   Currency ${index + 1}:`, {
-        currency_code: currencyObj.currency_code,
-        currency: currencyObj.currency,
-        balance: currencyObj.available_balance,
-        account_name: currencyObj.account_name,
-      });
-
-      return currencyObj;
-    });
-
-    console.log(
-      "✅ useFixedCurrency - Successfully transformed currencies:",
-      transformed.length,
-    );
-    console.log(
-      "📋 Available currencies:",
-      transformed.map((c) => c.currency_code).join(", "),
-    );
-
-    return transformed;
-  }, [accounts, accountLoading, accountError]);
-
-  // Handle initial currency selection
-  useEffect(() => {
-    console.log("🎯 useFixedCurrency - Initial currency effect:", {
-      initialCurrency,
-      currenciesCount: currencies.length,
-      currencies: currencies.map((c) => c.currency_code),
-    });
-
-    if (
-      initialCurrency &&
-      currencies.length > 0 &&
-      currencies.some((c) => c.currency_code === initialCurrency)
-    ) {
-      console.log(
-        "✅ useFixedCurrency - Initial currency is available:",
-        initialCurrency,
-      );
-    } else if (currencies.length > 0) {
-      console.log(
-        "ℹ️ useFixedCurrency - No initial currency provided, but",
-        currencies.length,
-        "currencies available",
-      );
-    } else {
-      console.log(
-        "📭 useFixedCurrency - No currencies available for initial selection",
-      );
-    }
-  }, [initialCurrency, currencies]);
-
-  // Return the currency state
-  const currencyState = useMemo(() => {
-    const state = {
-      currencies,
-      loading: accountLoading,
-      error: accountError,
-    };
-
-    console.log("📦 useFixedCurrency - Returning state:", {
-      currenciesCount: state.currencies.length,
-      loading: state.loading,
-      error: state.error,
-    });
-
-    return state;
-  }, [currencies, accountLoading, accountError]);
-
-  return currencyState;
+  return {
+    currencies,
+    loading: loading || !hasFetched, // Stays true until the first API request completes
+    error,
+    refetch: fetchActiveAccounts,
+  };
 };
 
-// Safe hook wrappers to prevent undefined errors
-const useSafeCurrency = (initialCurrency) => {
+// Safe hook wrapper passing customerId and initialCurrency
+const useSafeCurrency = (customerId, initialCurrency) => {
   try {
-    // Use the fixed currency hook instead of the original one
-    const result = useFixedCurrency(initialCurrency);
+    const result = useDirectAccountCurrency(customerId, initialCurrency);
     return {
       currencies: Array.isArray(result.currencies) ? result.currencies : [],
-      loading: result.loading || false,
+      loading: Boolean(result.loading),
       error: result.error || null,
+      refetch: result.refetch,
     };
   } catch (error) {
-    console.error("Error in useCurrency hook:", error);
+    console.error("Error in useSafeCurrency hook:", error);
     return {
       currencies: [],
       loading: false,
       error: "Failed to load currencies",
+      refetch: () => { },
     };
   }
 };
@@ -339,13 +245,13 @@ function getDepositFallback() {
     activeStep: 1,
     manualDetailsLoading: false,
     manualAccountDetails: null,
-    setSelectedCurrency: () => {},
-    setPaymentMethod: () => {},
-    setAmount: () => {},
-    setPurpose: () => {},
-    setSelectedBankAccount: () => {},
+    setSelectedCurrency: () => { },
+    setPaymentMethod: () => { },
+    setAmount: () => { },
+    setPurpose: () => { },
+    setSelectedBankAccount: () => { },
     handleSubmit: (e) => e.preventDefault(),
-    resetTransaction: () => {},
+    resetTransaction: () => { },
   };
 }
 
@@ -654,6 +560,8 @@ const DepositPageContent = () => {
   const [activeTab, setActiveTab] = useState("deposit");
   const [sessionData, setSessionData] = useState(null);
   const [depositDescription, setDepositDescription] = useState("");
+  const [payByLinkDescription, setPayByLinkDescription] = useState("");
+  const [payByLinkLoading, setPayByLinkLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
@@ -666,7 +574,7 @@ const DepositPageContent = () => {
 
   // Custom hooks with safe access
   const deposit = useSafeDeposit(customerId);
-  const currency = useSafeCurrency(initialCurrency);
+  const currency = useSafeCurrency(customerId, initialCurrency);
   const paymentMethods = useSafePaymentMethods(
     deposit.selectedCurrency,
     currency.currencies,
@@ -705,6 +613,111 @@ const DepositPageContent = () => {
     // Basic validation
     if (!deposit.amount || parseFloat(deposit.amount) <= 0) {
       errors.amount = "Please enter a valid amount";
+    }
+
+    // Pay by Link validation & API submission
+    if (deposit.paymentMethod === "pay_by_link") {
+      if (!payByLinkDescription.trim()) {
+        errors.description = "Please enter a description";
+      }
+
+      if (Object.keys(errors).length > 0) {
+        if (deposit.setFormErrors) {
+          deposit.setFormErrors(errors);
+        }
+        toast.error("Please fill all required fields");
+        return;
+      }
+
+      // Find the active account matching the selected currency
+      const selectedAccountObj = safeCurrencies.find(
+        (acc) => acc.currency_code === safeSelectedCurrency,
+      );
+
+      if (!selectedAccountObj) {
+        toast.error("Selected currency account details not found.");
+        return;
+      }
+
+      // Dynamically get base frontend origin (e.g., https://ourzap-v2.unlimitedremit.com)
+      const baseOrigin = window.location.origin;
+
+      // Get customer_uuid from localStorage for author_id
+      const authorId =
+        localStorage.getItem("customer_uuid") ||
+        localStorage.getItem("authcustomer_id") ||
+        "";
+
+      const token =
+        localStorage.getItem("authtoken") || tokenService.getToken();
+
+      if (!token) {
+        toast.error("Authentication token not found. Please log in again.");
+        return;
+      }
+
+      const payload = {
+        customer_id: selectedAccountObj.customer_id,
+        currency_code:
+          selectedAccountObj.currency || selectedAccountObj.currency_code,
+        service_provider_id: selectedAccountObj.service_provider_id,
+        description: payByLinkDescription.trim(),
+        success_url: `${baseOrigin}/pay-by-link-success`,
+        cancel_url: `${baseOrigin}/pay-by-link-cancel`,
+        amount: parseFloat(deposit.amount),
+        author_source: "zap",
+        author_type: "customer",
+        author_id: authorId,
+      };
+
+      const loadingToast = toast.loading("Generating payment link...");
+      setPayByLinkLoading(true);
+
+      try {
+        const response = await api.post(
+          "/transactions/payin-by-link",
+          payload,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        toast.dismiss(loadingToast);
+
+        // Extract payment link URL from common response shapes
+        const paymentUrl =
+          response.data?.data?.pay_by_link_url ||
+          response.data?.pay_by_link_url;
+
+        if (paymentUrl) {
+          // Open checkout URL in a new tab
+          window.open(paymentUrl, "_blank", "noopener,noreferrer");
+
+          // Reset form fields
+          deposit.resetTransaction();
+          setPayByLinkDescription("");
+        } else {
+          throw new Error(
+            response.data?.message || "Payment link URL not returned by server",
+          );
+        }
+      } catch (err) {
+        toast.dismiss(loadingToast);
+        console.error("❌ Pay by Link API error:", err);
+        const errMsg =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          err.message ||
+          "Failed to generate payment link";
+        toast.error(errMsg);
+      } finally {
+        setPayByLinkLoading(false);
+      }
+
+      return;
     }
 
     if (!deposit.purpose) {
@@ -1007,45 +1020,25 @@ const DepositPageContent = () => {
     fullReduxState,
   ]);
 
-  // Fixed currency auto-selection
+  // Auto-select ONLY if the API returns a single currency
   useEffect(() => {
-    console.log("🔄 CURRENCY AUTO-SELECTION:", {
-      hasCurrencies: currency.currencies?.length > 0,
-      currencies: currency.currencies?.map((c) => c.currency_code),
-      selectedCurrency: deposit.selectedCurrency,
-      initialCurrency,
-    });
+    const availableCurrencies = currency.currencies || [];
 
-    if (
-      currency.currencies &&
-      currency.currencies.length > 0 &&
-      !deposit.selectedCurrency
-    ) {
-      let currencyToSelect;
+    if (availableCurrencies.length === 0 || deposit.selectedCurrency) {
+      return;
+    }
 
-      // Try to use initial currency from URL if available and valid
-      if (
-        initialCurrency &&
-        currency.currencies.some((c) => c.currency_code === initialCurrency)
-      ) {
-        currencyToSelect = initialCurrency;
-        console.log("🎯 Using currency from URL params:", currencyToSelect);
-      } else {
-        // Fallback to first available currency
-        currencyToSelect = currency.currencies[0]?.currency_code;
-        console.log("🔄 Falling back to first currency:", currencyToSelect);
-      }
-
-      if (currencyToSelect && deposit.setSelectedCurrency) {
-        console.log("✅ Setting selected currency:", currencyToSelect);
-        deposit.setSelectedCurrency(currencyToSelect);
+    // Only auto-select when the API returns exactly 1 currency
+    if (availableCurrencies.length === 1) {
+      const singleCurrency = availableCurrencies[0]?.currency_code;
+      if (singleCurrency && deposit.setSelectedCurrency) {
+        deposit.setSelectedCurrency(singleCurrency);
       }
     }
   }, [
     currency.currencies,
     deposit.selectedCurrency,
     deposit.setSelectedCurrency,
-    initialCurrency,
   ]);
 
   // Critical Fixes for Manual Deposit Data
@@ -1218,7 +1211,7 @@ const DepositPageContent = () => {
     return (
       <ErrorState
         error={currency.error}
-        onRetry={() => window.location.reload()}
+        onRetry={currency.refetch}
       />
     );
   }
@@ -1291,22 +1284,20 @@ const DepositPageContent = () => {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab("deposit")}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "deposit"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "deposit"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
               >
                 <FaUniversity className="inline mr-2" />
                 Make Deposit
               </button>
               <button
                 onClick={() => setActiveTab("bank-accounts")}
-                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "bank-accounts"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "bank-accounts"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
               >
                 <FaUniversity className="inline mr-2" />
                 Bank Accounts
@@ -1395,20 +1386,81 @@ const DepositPageContent = () => {
                   )}
                 </div>
 
-                {/* Amount and Purpose Fields */}
-                {deposit.paymentMethod && (
-                  <div className="mb-8">
-                    <DepositDetails
-                      amount={deposit.amount}
-                      onAmountChange={deposit.setAmount}
-                      purpose={deposit.purpose}
-                      onPurposeChange={deposit.setPurpose}
-                      selectedCurrency={safeSelectedCurrency}
-                      errors={deposit.formErrors}
-                      isAmountFocused={ui.isAmountFocused}
-                      onAmountFocus={ui.setIsAmountFocused}
-                    />
-                  </div>
+                {/* Amount and Purpose / Description Fields */}
+                {deposit.paymentMethod === "pay_by_link" ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mb-8 bg-gray-50 p-6 rounded-xl border border-gray-200"
+                  >
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 font-sans">
+                      Pay by Link Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Amount Field */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 font-sans">
+                          Amount ({safeSelectedCurrency}) *
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            value={deposit.amount}
+                            onChange={(e) => deposit.setAmount(e.target.value)}
+                            placeholder="0.00"
+                            className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans ${deposit.formErrors.amount
+                              ? "border-red-500 bg-red-50"
+                              : "border-gray-300 bg-white"
+                              }`}
+                          />
+                        </div>
+                        {deposit.formErrors.amount && (
+                          <p className="mt-1 text-sm text-red-600 font-sans">
+                            {deposit.formErrors.amount}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Description Field */}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2 font-sans">
+                          Description *
+                        </label>
+                        <input
+                          type="text"
+                          value={payByLinkDescription}
+                          onChange={(e) => setPayByLinkDescription(e.target.value)}
+                          placeholder="Enter payment description"
+                          className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-sans ${deposit.formErrors.description
+                            ? "border-red-500 bg-red-50"
+                            : "border-gray-300 bg-white"
+                            }`}
+                        />
+                        {deposit.formErrors.description && (
+                          <p className="mt-1 text-sm text-red-600 font-sans">
+                            {deposit.formErrors.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  deposit.paymentMethod && (
+                    <div className="mb-8">
+                      <DepositDetails
+                        amount={deposit.amount}
+                        onAmountChange={deposit.setAmount}
+                        purpose={deposit.purpose}
+                        onPurposeChange={deposit.setPurpose}
+                        selectedCurrency={safeSelectedCurrency}
+                        errors={deposit.formErrors}
+                        isAmountFocused={ui.isAmountFocused}
+                        onAmountFocus={ui.setIsAmountFocused}
+                      />
+                    </div>
+                  )
                 )}
 
                 {/* USD Bank Deposit Info */}
@@ -1511,51 +1563,16 @@ const DepositPageContent = () => {
                       Cancel
                     </motion.button>
 
-                    {/* ✅ REMOVED: Card Payment Handler since card deposit is no longer available */}
-
-                    {/* ✅ OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK */}
-                    {(deposit.selectedCurrency === "EUR" ||
-                      deposit.selectedCurrency === "GBP" ||
-                      deposit.selectedCurrency === "DKK") &&
-                    deposit.paymentMethod === "bank_transfer" ? (
+                    {/* PAY BY LINK: Show Generate Payment Link button */}
+                    {deposit.paymentMethod === "pay_by_link" ? (
                       <motion.button
-                        type="button" // Change to button type, not submit
-                        onClick={() => {
-                          // First validate the form
-                          const errors = {};
-                          if (
-                            !deposit.amount ||
-                            parseFloat(deposit.amount) <= 0
-                          ) {
-                            errors.amount = "Please enter a valid amount";
-                          }
-                          if (!deposit.purpose) {
-                            errors.purpose =
-                              "Please enter a purpose for this deposit";
-                          }
-
-                          if (Object.keys(errors).length > 0) {
-                            // You need to make sure deposit.setFormErrors exists
-                            if (deposit.setFormErrors) {
-                              deposit.setFormErrors(errors);
-                            }
-                            toast.error("Please fill all required fields");
-                            return;
-                          }
-
-                          // Then trigger Open Banking
-                          console.log(
-                            "🎯 Initiating Open Banking for:",
-                            deposit.selectedCurrency,
-                          );
-                          dispatch(setShowPaymentInitiation(true));
-                        }}
-                        disabled={deposit.isSubmitting}
-                        whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
-                        whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
-                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all font-sans"
+                        type="submit"
+                        disabled={payByLinkLoading}
+                        whileHover={{ scale: payByLinkLoading ? 1 : 1.02 }}
+                        whileTap={{ scale: payByLinkLoading ? 1 : 0.98 }}
+                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all font-sans"
                       >
-                        {deposit.isSubmitting ? (
+                        {payByLinkLoading ? (
                           <>
                             <RingLoader
                               color="#ffffff"
@@ -1563,27 +1580,56 @@ const DepositPageContent = () => {
                               speedMultiplier={1}
                               className="mr-3"
                             />
-                            Initializing...
+                            Generating Link...
                           </>
                         ) : (
                           <>
-                            <FaUniversity className="mr-3" />
-                            Open Banking
+                            <FaCheck className="mr-3" />
+                            Generate Payment Link
                           </>
                         )}
                       </motion.button>
-                    ) : // ✅ USD BANK DEPOSIT: Show Submit or Link Account button
-                    deposit.selectedCurrency === "USD" &&
-                      deposit.paymentMethod === "bank_deposit" ? (
-                      deposit.selectedBankAccount ? (
+                    ) :/* OPEN BANKING: Show "Open Banking" button for EUR/GBP/DKK */
+                      (deposit.selectedCurrency === "EUR" ||
+                        deposit.selectedCurrency === "GBP" ||
+                        deposit.selectedCurrency === "DKK") &&
+                        deposit.paymentMethod === "bank_transfer" ? (
                         <motion.button
-                          type="submit"
-                          disabled={deposit.isSubmitting}
-                          whileHover={{
-                            scale: deposit.isSubmitting ? 1 : 1.02,
+                          type="button" // Change to button type, not submit
+                          onClick={() => {
+                            // First validate the form
+                            const errors = {};
+                            if (
+                              !deposit.amount ||
+                              parseFloat(deposit.amount) <= 0
+                            ) {
+                              errors.amount = "Please enter a valid amount";
+                            }
+                            if (!deposit.purpose) {
+                              errors.purpose =
+                                "Please enter a purpose for this deposit";
+                            }
+
+                            if (Object.keys(errors).length > 0) {
+                              // You need to make sure deposit.setFormErrors exists
+                              if (deposit.setFormErrors) {
+                                deposit.setFormErrors(errors);
+                              }
+                              toast.error("Please fill all required fields");
+                              return;
+                            }
+
+                            // Then trigger Open Banking
+                            console.log(
+                              "🎯 Initiating Open Banking for:",
+                              deposit.selectedCurrency,
+                            );
+                            dispatch(setShowPaymentInitiation(true));
                           }}
+                          disabled={deposit.isSubmitting}
+                          whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
                           whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
-                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-all font-sans"
                         >
                           {deposit.isSubmitting ? (
                             <>
@@ -1593,54 +1639,84 @@ const DepositPageContent = () => {
                                 speedMultiplier={1}
                                 className="mr-3"
                               />
-                              Processing...
+                              Initializing...
                             </>
                           ) : (
                             <>
-                              <FaCheck className="mr-3" />
-                              Submit Deposit
+                              <FaUniversity className="mr-3" />
+                              Open Banking
                             </>
                           )}
                         </motion.button>
-                      ) : (
-                        <motion.button
-                          type="button"
-                          onClick={() => navigate(`/linkbank/${customerId}`)}
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.98 }}
-                          className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-sans"
-                        >
-                          <FaUniversity className="mr-3" />
-                          Link Bank Account
-                        </motion.button>
-                      )
-                    ) : // ✅ OTHER CURRENCIES/NON-USD METHODS: Show Submit button
-                    deposit.selectedCurrency && deposit.paymentMethod ? (
-                      <motion.button
-                        type="submit"
-                        disabled={deposit.isSubmitting}
-                        whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
-                        whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
-                        className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
-                      >
-                        {deposit.isSubmitting ? (
-                          <>
-                            <RingLoader
-                              color="#ffffff"
-                              size={20}
-                              speedMultiplier={1}
-                              className="mr-3"
-                            />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            <FaCheck className="mr-3" />
-                            Submit Deposit
-                          </>
-                        )}
-                      </motion.button>
-                    ) : null}
+                      ) : // ✅ USD BANK DEPOSIT: Show Submit or Link Account button
+                        deposit.selectedCurrency === "USD" &&
+                          deposit.paymentMethod === "bank_deposit" ? (
+                          deposit.selectedBankAccount ? (
+                            <motion.button
+                              type="submit"
+                              disabled={deposit.isSubmitting}
+                              whileHover={{
+                                scale: deposit.isSubmitting ? 1 : 1.02,
+                              }}
+                              whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
+                              className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                            >
+                              {deposit.isSubmitting ? (
+                                <>
+                                  <RingLoader
+                                    color="#ffffff"
+                                    size={20}
+                                    speedMultiplier={1}
+                                    className="mr-3"
+                                  />
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <FaCheck className="mr-3" />
+                                  Submit Deposit
+                                </>
+                              )}
+                            </motion.button>
+                          ) : (
+                            <motion.button
+                              type="button"
+                              onClick={() => navigate(`/linkbank/${customerId}`)}
+                              whileHover={{ scale: 1.02 }}
+                              whileTap={{ scale: 0.98 }}
+                              className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all font-sans"
+                            >
+                              <FaUniversity className="mr-3" />
+                              Link Bank Account
+                            </motion.button>
+                          )
+                        ) : // ✅ OTHER CURRENCIES/NON-USD METHODS: Show Submit button
+                          deposit.selectedCurrency && deposit.paymentMethod ? (
+                            <motion.button
+                              type="submit"
+                              disabled={deposit.isSubmitting}
+                              whileHover={{ scale: deposit.isSubmitting ? 1 : 1.02 }}
+                              whileTap={{ scale: deposit.isSubmitting ? 1 : 0.98 }}
+                              className="inline-flex justify-center items-center px-8 py-4 border border-transparent rounded-xl shadow-sm text-base font-medium text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-all font-sans"
+                            >
+                              {deposit.isSubmitting ? (
+                                <>
+                                  <RingLoader
+                                    color="#ffffff"
+                                    size={20}
+                                    speedMultiplier={1}
+                                    className="mr-3"
+                                  />
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <FaCheck className="mr-3" />
+                                  Submit Deposit
+                                </>
+                              )}
+                            </motion.button>
+                          ) : null}
                   </div>
                 )}
               </form>
@@ -1700,3 +1776,4 @@ const DepositPage = () => {
 };
 
 export default DepositPage;
+ 

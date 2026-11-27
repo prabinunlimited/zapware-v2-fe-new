@@ -1,6 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { FaCheck, FaInfoCircle, FaClock, FaDollarSign, FaLock } from 'react-icons/fa';
+import {
+  FaCheck,
+  FaInfoCircle,
+  FaClock,
+  FaDollarSign,
+  FaLink,
+} from 'react-icons/fa';
 
 const PaymentMethodCard = ({
   method,
@@ -44,6 +50,14 @@ const PaymentMethodCard = ({
         features: ['Plaid secure', 'US banks only', 'Quick setup'],
         time: '1-2 days',
         fee: 'Free'
+      },
+      pay_by_link: {
+        color: 'from-indigo-500 to-indigo-600',
+        bgColor: 'bg-indigo-50',
+        borderColor: 'border-indigo-200',
+        features: ['Shareable payment link', 'Secure checkout', 'Fast settlement'],
+        time: 'Instant',
+        fee: 'Free'
       }
     };
     
@@ -75,9 +89,9 @@ const PaymentMethodCard = ({
       )}
 
       <div className="flex items-start space-x-4">
-        {/* Icon */}
+        {/* Icon (with fallback if PaymentMethodSelection doesn't pass one) */}
         <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-r ${methodDetails.color} text-white flex-shrink-0`}>
-          {method.icon}
+          {method.icon || (method.value === 'pay_by_link' ? <FaLink className="text-xl" /> : null)}
         </div>
 
         {/* Content */}
@@ -141,7 +155,9 @@ const PaymentMethodCard = ({
           animate={{ opacity: 1, y: 0 }}
           className="absolute left-0 right-0 top-full mt-2 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-xl z-10"
         >
-          <p className="font-medium">{method.help}</p>
+          <p className="font-medium">
+            {method.help || method.description}
+          </p>
           <div className="absolute -top-1 left-6 w-3 h-3 bg-gray-900 transform rotate-45"></div>
         </motion.div>
       )}

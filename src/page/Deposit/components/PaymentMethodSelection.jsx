@@ -48,48 +48,52 @@ const PaymentMethodSelection = ({
       bank_deposit: {
         value: "bank_deposit",
         label: "Bank Transfer",
-        icon: <FaLink />,
+        icon: <FaUniversity />,
         description: "Instant transfer via bank",
         help: "Secure bank transfer from your bank to enable secure USD deposits and transfers. Available for USD currency only.",
+      },
+      pay_by_link: {
+        value: "pay_by_link",
+        label: "Pay By Link",
+        icon: <FaLink />,
+        description: "Generate or pay using a secure payment link",
+        help: "Create a secure hosted payment link to complete your deposit quickly.",
       },
     };
 
     if (availableMethods && availableMethods.length > 0) {
       return availableMethods.map((method) => {
-        const definition = paymentMethodDefinitions[method.value] || {
+        const baseDefinition = paymentMethodDefinitions[method.value];
+
+        if (baseDefinition) {
+          return {
+            ...baseDefinition,
+            // Preserve the exact label/description from the API if provided
+            label: method.label || baseDefinition.label,
+            description: method.description || baseDefinition.description,
+          };
+        }
+
+        return {
           value: method.value,
           label:
             method.label ||
             method.value
-              .replace("_", " ")
+              .replace(/_/g, " ")
               .replace(/\b\w/g, (l) => l.toUpperCase()),
           description:
             method.description ||
-            `Deposit via ${method.value.replace("_", " ")}`,
+            `Deposit via ${method.value.replace(/_/g, " ")}`,
           icon: <FaUniversity />,
           help:
             method.description ||
-            `Deposit via ${method.value.replace("_", " ")}`,
+            `Deposit via ${method.value.replace(/_/g, " ")}`,
         };
-        return definition;
       });
     }
 
-    // Default methods based on currency (CARD PAYMENT REMOVED)
-    const defaultMethods = {
-      USD: ["manual_deposit", "bank_deposit"],
-      EUR: ["manual_deposit", "bank_transfer"],
-      GBP: ["manual_deposit", "bank_transfer"],
-      DKK: ["manual_deposit", "bank_transfer"],
-      AED: ["manual_deposit"], // Removed card_deposit from AED
-    };
-
-    const allowedMethods = defaultMethods[selectedCurrency] || [
-      "manual_deposit",
-    ];
-    return allowedMethods
-      .filter((method) => paymentMethodDefinitions[method])
-      .map((method) => paymentMethodDefinitions[method]);
+    // Return empty array if API returned no methods so UI shows the empty state
+    return [];
   }, [selectedCurrency, availableMethods]);
 
   const handlePaymentMethodSelect = (methodValue) => {
@@ -155,8 +159,8 @@ const PaymentMethodSelection = ({
       {selectedCurrency === "AED" && (
         <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
           <p className="text-sm text-purple-700">
-            <strong>AED Deposits:</strong> Use "Manual Deposit" for bank
-            transfer (card payment not available for AED)
+            <strong>AED Deposits:</strong> Choose an available deposit method
+            below to fund your AED account
           </p>
         </div>
       )}

@@ -1,4 +1,4 @@
-// src/page/Deposit/slices/currencySlice.js - COMPLETE FIXED VERSION
+// src/page/Deposit/slices/currencySlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { tokenService } from "../../../services/authService";
@@ -7,8 +7,12 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 export const fetchPaymentMethodsByCurrency = createAsyncThunk(
   "currency/fetchPaymentMethodsByCurrency",
-  async (currencyIdentifier, { rejectWithValue }) => {
+  async ({ currencyId, serviceProviderId }, { rejectWithValue }) => {
     try {
+      if (!currencyId || !serviceProviderId) {
+        return rejectWithValue("Missing currency_id or service_provider_id");
+      }
+
       const token = tokenService.getToken();
 
       if (!token) {
@@ -41,8 +45,9 @@ export const fetchPaymentMethodsByCurrency = createAsyncThunk(
         throw new Error("No authentication token available");
       }
 
+      // ✅ Updated endpoint using currency_id and service_provider_id
       const response = await axios.get(
-        `${API_URL}/deposit-types-by-currency/${currencyIdentifier}`,
+        `${API_URL}/deposit-types-by-currency-service-provider/${currencyId}/${serviceProviderId}`,
         {
           headers: {
             Authorization: `Bearer ${finalToken}`,
@@ -52,32 +57,25 @@ export const fetchPaymentMethodsByCurrency = createAsyncThunk(
         }
       );
 
-      let methodsData = [];
+      const resData = response.data;
+      let rawLists = [];
 
-      if (Array.isArray(response.data)) {
-        methodsData = response.data;
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        methodsData = response.data.data;
-      } else if (
-        response.data?.methods &&
-        Array.isArray(response.data.methods)
-      ) {
-        methodsData = response.data.methods;
-      } else if (
-        response.data?.deposit_types &&
-        Array.isArray(response.data.deposit_types)
-      ) {
-        methodsData = response.data.deposit_types;
-      } else if (
-        response.data?.status === "success" &&
-        Array.isArray(response.data.data)
-      ) {
-        methodsData = response.data.data;
-      } else {
-        return [];
+      if (Array.isArray(resData?.data?.lists)) {
+        rawLists = resData.data.lists;
+      } else if (Array.isArray(resData?.lists)) {
+        rawLists = resData.lists;
+      } else if (Array.isArray(resData?.data)) {
+        rawLists = resData.data;
+      } else if (Array.isArray(resData)) {
+        rawLists = resData;
       }
 
-      return methodsData;
+      return rawLists.filter(
+        (item) =>
+          item.is_active === 1 ||
+          item.is_active === true ||
+          item.is_active === undefined
+      );
     } catch (error) {
       if (error.response?.status === 401) {
         return rejectWithValue("Authentication failed. Please log in again.");

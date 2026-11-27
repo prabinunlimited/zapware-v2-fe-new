@@ -1,4 +1,4 @@
-// src/page/Deposit/hooks/usePaymentMethods.js - COMPLETE FIXED VERSION
+// src/page/Deposit/hooks/usePaymentMethods.js
 import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -8,71 +8,71 @@ import {
   selectPaymentMethodsError,
 } from "../slices/currencySlice";
 
-// Payment method configuration based on specifications
-const getPaymentMethodsByCurrency = (currency) => {
-  const paymentMethodConfig = {
-    EUR: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
-    GBP: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
-    DKK: ["manual_deposit", "bank_transfer"], // Removed "card_deposit"
-    AED: ["manual_deposit"], // Removed "card_deposit"
-    USD: ["manual_deposit", "bank_deposit"], // Removed "card_deposit"
-  };
+const mapMethodNameToValue = (rawName, selectedCurrency) => {
+  const normalized = rawName.toLowerCase().trim().replace(/\s+/g, "_");
 
-  return paymentMethodConfig[currency] || [];
+  if (normalized === "manual" || normalized === "manual_deposit") {
+    return "manual_deposit";
+  }
+
+  if (normalized === "bank" || normalized === "bank_transfer") {
+    return selectedCurrency === "USD" ? "bank_deposit" : "bank_transfer";
+  }
+
+  if (
+    normalized === "pay_by_link" ||
+    normalized === "paybylink" ||
+    normalized === "payment_link"
+  ) {
+    return "pay_by_link";
+  }
+
+  return normalized;
 };
 
-// Transform API response to consistent format
-const transformPaymentMethods = (apiResponse, selectedCurrency) => {
-  console.log("🔄 Transforming API response:", apiResponse);
-
-  if (!apiResponse) {
-    console.log("❌ No API response to transform");
-    return [];
+const getMethodDescription = (value, label) => {
+  switch (value) {
+    case "manual_deposit":
+      return "Bank transfer using account details";
+    case "bank_transfer":
+      return "Instant transfer via Open Banking";
+    case "bank_deposit":
+      return "Connect your bank account for deposits";
+    case "pay_by_link":
+      return "Generate or pay using a secure payment link";
+    default:
+      return `Deposit via ${label}`;
   }
+};
+
+const transformPaymentMethods = (apiResponse, selectedCurrency) => {
+  if (!apiResponse) return [];
 
   let methodsData = [];
 
   if (Array.isArray(apiResponse)) {
     methodsData = apiResponse;
-  } else if (apiResponse.data && Array.isArray(apiResponse.data)) {
+  } else if (Array.isArray(apiResponse?.data?.lists)) {
+    methodsData = apiResponse.data.lists;
+  } else if (Array.isArray(apiResponse?.data)) {
     methodsData = apiResponse.data;
-  } else if (apiResponse.methods && Array.isArray(apiResponse.methods)) {
-    methodsData = apiResponse.methods;
-  } else if (
-    apiResponse.deposit_types &&
-    Array.isArray(apiResponse.deposit_types)
-  ) {
-    methodsData = apiResponse.deposit_types;
-  } else {
-    console.log("⚠️ Unknown API response structure, using empty array");
-    return [];
   }
 
-  console.log(`✅ Found ${methodsData.length} methods from API`);
-
-  const transformedMethods = methodsData.map((method) => {
-    const value =
-      method.value || method.method_type || method.id || method.name;
-    const label =
-      method.label ||
-      method.method_name ||
-      method.display_name ||
-      (value
-        ? value.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())
-        : "Unknown");
-    const description =
-      method.description || method.method_description || `Deposit via ${label}`;
+  return methodsData.map((method) => {
+    const rawName = (method.name || method.label || method.value || "").toString();
+    const value = mapMethodNameToValue(rawName, selectedCurrency);
+    const label = method.name || method.label || value;
 
     return {
-      value: value,
-      label: label,
-      description: description,
+      id: method.id,
+      value,
+      label,
+      description: method.description || getMethodDescription(value, label),
+      service_provider_id: method.service_provider_id,
+      currency_id: method.currency_id,
       original: method,
     };
   });
-
-  console.log("✅ Transformed methods:", transformedMethods);
-  return transformedMethods;
 };
 
 export const usePaymentMethods = (selectedCurrency, currencies) => {
@@ -85,122 +85,39 @@ export const usePaymentMethods = (selectedCurrency, currencies) => {
   useEffect(() => {
     if (
       selectedCurrency &&
-      currencies &&
       Array.isArray(currencies) &&
       currencies.length > 0
     ) {
-      console.log(
-        "🔄 Fetching payment methods for currency:",
-        selectedCurrency,
-      );
-
       const selectedCurrencyObj = currencies.find(
         (currency) => currency.currency_code === selectedCurrency,
       );
 
-      let currencyIdentifier = null;
+      const currencyId =
+        selectedCurrencyObj?.currency_id || selectedCurrencyObj?.currencyid;
+      const serviceProviderId = selectedCurrencyObj?.service_provider_id;
 
-      if (selectedCurrencyObj?.currencyid) {
-        currencyIdentifier = selectedCurrencyObj.currencyid;
-      } else if (selectedCurrencyObj?.currency_id) {
-        currencyIdentifier = selectedCurrencyObj.currency_id;
-      } else if (selectedCurrencyObj?.account_id) {
-        currencyIdentifier = selectedCurrencyObj.account_id;
-      } else {
-        currencyIdentifier = selectedCurrency;
-      }
-
-      if (currencyIdentifier) {
-        dispatch(fetchPaymentMethodsByCurrency(currencyIdentifier));
+      if (currencyId && serviceProviderId) {
+        dispatch(
+          fetchPaymentMethodsByCurrency({
+            currencyId,
+            serviceProviderId,
+          }),
+        );
       }
     }
-  }, [selectedCurrency, currencies, dispatch, paymentMethods.length]);
+  }, [selectedCurrency, currencies, dispatch]);
 
-  const filteredMethods = useMemo(() => {
-    if (!selectedCurrency) {
+  const methods = useMemo(() => {
+    if (!selectedCurrency || loading || error) {
       return [];
     }
 
-    console.log("🎯 Filtering payment methods for:", selectedCurrency);
-    console.log("📊 Raw payment methods from API:", paymentMethods);
-    console.log("⏳ Loading state:", loading);
-    console.log("❌ Error state:", error);
-
-    if (error) {
-      console.log("🚨 Error in payment methods, using fallback");
-      return getFallbackMethods(selectedCurrency);
-    }
-
-    if (loading) {
-      console.log("⏳ Still loading payment methods");
-      return [];
-    }
-
-    const transformedMethods = transformPaymentMethods(
-      paymentMethods,
-      selectedCurrency,
-    );
-
-    const allowedMethods = getPaymentMethodsByCurrency(selectedCurrency);
-    console.log(
-      "✅ Allowed methods for",
-      selectedCurrency,
-      ":",
-      allowedMethods,
-    );
-
-    const filtered = transformedMethods.filter((method) => {
-      const isAllowed = allowedMethods.includes(method.value);
-      return isAllowed;
-    });
-
-    console.log("✅ Final filtered methods:", filtered);
-
-    if (filtered.length === 0 && !loading && !error) {
-      console.log("🔄 No methods found after filtering, using fallback");
-      return getFallbackMethods(selectedCurrency);
-    }
-
-    return filtered;
+    return transformPaymentMethods(paymentMethods, selectedCurrency);
   }, [paymentMethods, selectedCurrency, loading, error]);
 
   return {
-    methods: filteredMethods,
-    loading: loading,
-    error: error,
+    methods,
+    loading,
+    error,
   };
-};
-
-const getFallbackMethods = (currency) => {
-  console.log("🔄 Using fallback methods for:", currency);
-
-  const fallbackMethods = {
-    manual_deposit: {
-      value: "manual_deposit",
-      label: "Manual Deposit",
-      description: "Bank transfer using account details",
-    },
-    bank_transfer: {
-      value: "bank_transfer",
-      label: "Bank Transfer",
-      description: "Instant transfer via Open Banking",
-    },
-    bank_deposit: {
-      value: "bank_deposit",
-      label: "Link Bank Account",
-      description: "Connect your bank account for deposits",
-    },
-  };
-
-  const allowedMethods = getPaymentMethodsByCurrency(currency);
-  return allowedMethods.map(
-    (method) =>
-      fallbackMethods[method] || {
-        value: method,
-        label: method
-          .replace("_", " ")
-          .replace(/\b\w/g, (l) => l.toUpperCase()),
-        description: `Deposit via ${method.replace("_", " ")}`,
-      },
-  );
 };
